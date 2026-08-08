@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Define the color blue -->
+  <material name="blue">
+    <color rgba="0 0 1 1"/>
+  </material>
+
+  <!-- Base Link -->
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="0.6 0.4 0.3"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+    
+    <collision>
+      <geometry>
+        <box size="0.6 0.4 0.3"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <mass value="10.0"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="0.20833" ixy="0.0" ixz="0.0" 
+               iyy="0.375" iyz="0.0" 
+               izz="0.43333"/>
+    </inertial>
+  </link>
+
+</robot>

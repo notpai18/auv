@@ -1,0 +1,142 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <model name="auv_box">
+    
+    <link name="base_link">
+      <inertial>
+        <mass>74.0</mass>
+        <inertia>
+          <ixx>1.54167</ixx>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyy>2.775</iyy>
+          <iyz>0.0</iyz>
+          <izz>3.20667</izz>
+        </inertia>
+      </inertial>
+
+      <visual name="base_link_visual">
+        <geometry>
+          <box>
+            <size>0.6 0.4 0.3</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>0 0 1 1</ambient>
+          <diffuse>0 0 1 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+
+      <collision name="base_link_collision">
+        <geometry>
+          <box>
+            <size>0.6 0.4 0.3</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Camera 1 - Front Left -->
+    <link name="front_left_camera_link">
+      <pose relative_to="base_link">0.3 0.06 0 0 0 0</pose>
+      <inertial>
+        <mass>0.0001</mass>
+        <inertia>
+          <ixx>0.0001</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>0.0001</iyy><iyz>0</iyz>
+          <izz>0.0001</izz>
+        </inertia>
+      </inertial>
+      <sensor name="front_left_camera_sensor" type="camera">
+        <update_rate>15</update_rate>
+        <visualize>false</visualize>
+        <always_on>true</always_on>
+        <topic>/model/auv_box/stereo_front/left/image_raw</topic>
+        <camera>
+          <horizontal_fov>1.05</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+          </image>
+          <clip>
+            <near>0.1</near>
+            <far>10.0</far>
+          </clip>
+        </camera>
+      </sensor>
+    </link>
+    
+    <joint name="front_left_camera_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>front_left_camera_link</child>
+    </joint>
+
+    <!-- Camera 2 - Front Right -->
+    <link name="front_right_camera_link">
+      <pose relative_to="base_link">0.3 -0.06 0 0 0 0</pose>
+      <inertial>
+        <mass>0.0001</mass>
+        <inertia>
+          <ixx>0.0001</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>0.0001</iyy><iyz>0</iyz>
+          <izz>0.0001</izz>
+        </inertia>
+      </inertial>
+      <sensor name="front_right_camera_sensor" type="camera">
+        <update_rate>15</update_rate>
+        <visualize>false</visualize>
+        <always_on>true</always_on>
+        <topic>/model/auv_box/stereo_front/right/image_raw</topic>
+        <camera>
+          <horizontal_fov>1.05</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+          </image>
+          <clip>
+            <near>0.1</near>
+            <far>10.0</far>
+          </clip>
+        </camera>
+      </sensor>
+    </link>
+    
+    <joint name="front_right_camera_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>front_right_camera_link</child>
+    </joint>
+
+    <!-- Hydrodynamics Plugin -->
+    <plugin filename="gz-sim-hydrodynamics-system" name="gz::sim::systems::Hydrodynamics">
+      <link_name>base_link</link_name>
+      <water_density>1025.0</water_density>
+      <xDotU>0</xDotU> <yDotV>0</yDotV> <zDotW>0</zDotW>
+      <kDotP>0</kDotP> <mDotQ>0</mDotQ> <nDotR>0</nDotR>
+      <xU>0</xU> <yV>0</yV> <zW>0</zW>
+      <kP>0</kP> <mQ>0</mQ> <nR>0</nR>
+      <xUabsU>-33.732</xUabsU>
+      <yVabsV>-54.16</yVabsV>
+      <zWabsW>-73.225</zWabsW>
+      <kPabsP>-3.992</kPabsP>
+      <mQabsQ>-3.992</mQabsQ>
+      <nRabsR>-3.992</nRabsR>
+    </plugin>
+
+    <!-- Velocity Control Plugin -->
+    <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl">
+      <topic>/model/auv_box/cmd_vel</topic>
+      <initial_linear>0 0 0</initial_linear>
+      <initial_angular>0 0 0</initial_angular>
+    </plugin>
+
+    <!-- Odometry Publisher Plugin -->
+    <plugin filename="gz-sim-odometry-publisher-system" name="gz::sim::systems::OdometryPublisher">
+      <odom_frame>map</odom_frame>
+      <robot_base_frame>base_link</robot_base_frame>
+      <dimensions>3</dimensions>
+      <odom_publish_frequency>50</odom_publish_frequency>
+    </plugin>
+
+  </model>
+</sdf>
