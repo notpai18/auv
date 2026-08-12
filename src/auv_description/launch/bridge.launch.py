@@ -2,7 +2,6 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 
 def generate_launch_description():
-
     # Image bridge: raw left/right images
     image_bridge = Node(
         package='ros_gz_image',
@@ -18,6 +17,7 @@ def generate_launch_description():
     parameter_bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
+        remappings=[('/model/auv_box/odometry', '/auv/odom')],
         arguments=[
             '/model/auv_box/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
             '/model/auv_box/odometry@nav_msgs/msg/Odometry[gz.msgs.Odometry',

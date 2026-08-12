@@ -4,13 +4,19 @@
   <name>auv_vision</name>
   <version>0.0.0</version>
   <description>AUV Vision package for object detection using YOLOv8</description>
-  <maintainer email="pranav2pai@gmail.com">Your Name</maintainer>
+  <maintainer email="your_email@example.com">Your Name</maintainer>
   <license>TODO: License declaration</license>
 
+  <!-- Existing Dependencies -->
   <depend>rclpy</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
   <depend>cv_bridge</depend>
+
+  <!-- New Dependencies for Localizer Node -->
+  <depend>message_filters</depend>
+  <depend>stereo_msgs</depend>
+  <depend>geometry_msgs</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
