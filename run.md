@@ -1,6 +1,21 @@
 # AUV Gate Mission — Run Guide
+
+# ════════════════════════════════════════════════════════════
+# OPTION A — Single launch file (recommended)
+# Starts everything automatically in the correct order.
+# Wait ~14 seconds for all nodes to come up.
+# ════════════════════════════════════════════════════════════
+source ~/auv_ws/install/setup.bash
+ros2 launch auv_bringup sim_mission.launch.py
+
+# Custom spawn position (optional args):
+# ros2 launch auv_bringup sim_mission.launch.py spawn_x:=0.0 spawn_y:=0.0 spawn_yaw:=0.0
+
+# ════════════════════════════════════════════════════════════════════════
+# OPTION B — Manual terminals (use for debugging individual nodes)
 # Open a NEW terminal for each numbered section. Run them IN ORDER.
 # Wait for each terminal to be ready before moving to the next.
+# ════════════════════════════════════════════════════════════════════════
 
 # ════════════════════════════════════════════════════════════
 # TERMINAL 1 — Kill old Gazebo (run once before anything else)
@@ -66,51 +81,45 @@ source ~/auv_ws/install/setup.bash
 ros2 run auv_vision gate_localizer_node
 
 # ════════════════════════════════════════════════════════════
-# TERMINAL 7 — Mission logger
+# TERMINAL 7 — Mission logger (CSV)
+# Logs: all topics → ~/auv_ws/mission_logs/mission_run_<ts>.csv
 # ════════════════════════════════════════════════════════════
 source ~/auv_ws/install/setup.bash
 ros2 run auv_telemetry mission_logger_node
 
 # ════════════════════════════════════════════════════════════
 # TERMINAL 8 — Gate navigator (main state machine)
-# States: SEARCH → TRACK → ALIGN → CROSS → STOP
+# States: SEARCH → TRACK → ALIGN → CROSS → STOP → RETURN → DONE
 # Publishes: /model/auv_box/cmd_vel  /auv/mission_state
 # ════════════════════════════════════════════════════════════
 source ~/auv_ws/install/setup.bash
 ros2 run auv_planner gate_navigator_node
 
 # ════════════════════════════════════════════════════════════
-# TERMINAL 9 — Live camera view (left stereo camera)
+# TERMINAL 9 — Trail mapper
+# Records AUV trajectory (every 0.1 m)
+# Publishes: /auv/trail_map (nav_msgs/Path)
+# Saves:     ~/auv_ws/mission_logs/trail_<ts>.csv on shutdown
+# ════════════════════════════════════════════════════════════
+source ~/auv_ws/install/setup.bash
+ros2 run auv_telemetry trail_mapper_node
+
+# ════════════════════════════════════════════════════════════
+# TERMINAL 10 — RViz2 visualizer (pre-configured, no setup needed)
+# Shows: AUV position (red arrow) + full trajectory trail (green line)
+# Fixed frame: map | Background: dark
+# ════════════════════════════════════════════════════════════
+source ~/auv_ws/install/setup.bash
+rviz2 -d ~/auv_ws/src/auv_description/rviz/auv.rviz
+
+# ════════════════════════════════════════════════════════════
+# TERMINAL 11 — Live camera view (left stereo camera)
 # ════════════════════════════════════════════════════════════
 source ~/auv_ws/install/setup.bash
 ros2 run image_view image_view --ros-args -r image:=/model/auv_box/stereo_front/left/image_raw
 
 # ════════════════════════════════════════════════════════════
-# TERMINAL 10 — (Optional) Monitor mission state live
+# TERMINAL 12 — (Optional) Monitor mission state live
 # ════════════════════════════════════════════════════════════
 source ~/auv_ws/install/setup.bash
 ros2 topic echo /auv/mission_state
-
-# ════════════════════════════════════════════════════════════
-# TERMINAL 11 — (Optional) Monitor 3D gate position live
-# ════════════════════════════════════════════════════════════
-source ~/auv_ws/install/setup.bash
-ros2 topic echo /auv/gate_position_3d
-
-# ════════════════════════════════════════════════════════════
-# TERMINAL 12 — YOLO live detection feed
-# Shows raw YOLO output: [detected, cx, cy, w, h, conf, 1.0]
-# If "detected" = 0.0 always → YOLO cannot see the gate
-# If "conf" stays below 0.30 → too far or model struggling
-# ════════════════════════════════════════════════════════════
-source ~/auv_ws/install/setup.bash
-ros2 topic echo /auv/gate_detection_2d
-
-# ════════════════════════════════════════════════════════════
-# TERMINAL 13 — Debug image (YOLO annotated frame)
-# YOLO saves its annotated image here every frame — open it
-# in a viewer to see what the model is detecting in real time
-# ════════════════════════════════════════════════════════════
-eog /home/pai/yolo_debug/latest_detection.jpg
-# OR use:
-# feh --reload 1 /home/pai/yolo_debug/latest_detection.jpg

@@ -20,7 +20,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'mission_logger_node = auv_telemetry.mission_logger_node:main'
+            'mission_logger_node  = auv_telemetry.mission_logger_node:main',
+            'trail_mapper_node    = auv_telemetry.trail_mapper_node:main',
+            'mission_monitor_node = auv_telemetry.mission_monitor_node:main',
         ],
     },
 )
