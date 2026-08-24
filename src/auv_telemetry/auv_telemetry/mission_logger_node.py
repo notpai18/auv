@@ -52,6 +52,13 @@ class MissionLoggerNode(Node):
     def __init__(self):
         super().__init__('mission_logger_node')
 
+        # ------------------------------------------------------------------ #
+        #  Declare all tunable parameters (overridable via YAML or CLI)       #
+        # ------------------------------------------------------------------ #
+        self.declare_parameter('log_dir', '~/auv_ws/mission_logs')
+        self.p_log_dir = os.path.expanduser(self.get_parameter('log_dir').value)
+        # ------------------------------------------------------------------ #
+
         # ── Cache variables ──────────────────────────────────────────────
         self.latest_state = None
         self.prev_state   = None   # used to detect state transitions
@@ -81,7 +88,7 @@ class MissionLoggerNode(Node):
         self.cmd_angular_z = None
 
         # ── CSV file ─────────────────────────────────────────────────────
-        log_dir = os.path.join(os.path.expanduser('~'), 'auv_ws', 'mission_logs')
+        log_dir = self.p_log_dir
         os.makedirs(log_dir, exist_ok=True)
 
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')

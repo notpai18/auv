@@ -1,0 +1,649 @@
+<?xml version="1.0" ?>
+<!--
+  AUV Competition Pool World — DAVE water dynamics
+  ================================================
+  Migrated from camera_test.sdf. Pool geometry, props, lighting, fog AND physics
+  are all unchanged from the original: the vision pipeline (YOLO gate detector,
+  HSV green/blue detectors) is tuned against those exact colours and that exact
+  fog, and the missions depend on the prop positions and on the AUV holding its
+  spawn depth. What this world adds is DAVE's ocean-current infrastructure, plus
+  a documented, commented-out path to DAVE buoyancy.
+
+  Pool dimensions: 28 m (width, X) x 25 m (length, Y) x 5 m (depth, Z)
+
+  Coordinate convention (world frame matching the 2D schematic):
+    Origin (0, 0, 0)  = Bottom-Left corner of the schematic AT THE WATER SURFACE
+    X-axis (0 to 28)  = Runs left to right (along the 28m bottom edge)
+    Y-axis (0 to 25)  = Runs bottom to top
+    Z-axis (0 to -5)  = Runs surface to pool floor
+
+
+  WHAT CHANGED vs camera_test.sdf
+  ==============================
+  1. VISIBLE WATER: DAVE's animated Coast Water ocean surface at z=0, a
+     water_volume tinting the pool below it, and the four walls raised 0.6 m so
+     there is a dry rim above the waterline. See THE WATER section for why that
+     freeboard is what makes the pool read as full.
+
+  2. DAVE ocean current (OceanCurrentWorldPlugin + OceanCurrentPlugin), wired up
+     and publishing on ROS under /hydrodynamics. The current is DEFAULTED TO
+     ZERO — see the CURRENT block below for how to turn it on.
+
+  3. Gravity stays at zero and buoyancy stays off, so the AUV holds its spawn
+     depth exactly as it always has. The DAVE graded buoyancy block is present
+     but COMMENTED OUT, carrying the arithmetic and the three-step checklist
+     needed to switch to real weight-vs-buoyancy later.
+
+  Mission-relevant geometry is untouched: floor at -5, every prop pose, and the
+  spawn depth are all exactly as they were. Only wall HEIGHT changed, from 5.0 m
+  (-5..0, flush with the surface) to 5.6 m (-5..+0.6).
+
+
+  THE CAMERA FEEDS DO NOT LOOK UNDERWATER, AND CANNOT BE MADE TO FROM HERE
+  =======================================================================
+  Verified by rendering, not assumed. Two independent reasons:
+
+  1. <fog> is a NO-OP in Gazebo Harmonic. See the FOG note in <scene> below.
+
+  2. The water_volume CANNOT tint the AUV's cameras, because they sit INSIDE it.
+     A hollow box only tints what is seen THROUGH one of its faces. With the
+     camera inside, the near face is behind it and the far faces are behind the
+     props, so the props are drawn in front of the water, not through it. This
+     is geometry, not a tuning problem — no transparency value fixes it. The
+     volume works for the external/GUI view and only for that.
+
+  So making the feeds look underwater needs per-pixel work on the image:
+  DAVE's UnderwaterCamera plugin (per-channel Beer-Lambert), or a ROS node doing
+  the same using the depth stereo_image_proc already produces. Both are real
+  work — see the FOG note for what adopting the DAVE plugin costs.
+
+
+  READ THIS BEFORE EDITING THE OCEAN CURRENT PLUGIN
+  =================================================
+  OceanCurrentWorldPlugin does NOT null-check two of its SDF children. In
+  LoadGlobalCurrentConfig() and LoadStratifiedCurrentDatabase() it logs an error
+  when <constant_current> / <transient_current> are missing and then dereferences
+  the null ElementPtr anyway. Deleting either block SEGFAULTS Gazebo at load.
+  Both must stay present even when unused.
+
+  The plugin also calls get_package_share_directory("dave_worlds"), so dave_ws
+  must be sourced (sim_mission.launch.py handles this).
+
+
+  Usage
+  =====
+    source ~/dave_ws/install/setup.bash
+    source ~/auv_ws/install/setup.bash
+    ros2 launch auv_bringup sim_mission.launch.py
+
+  To fall back to the original world (identical physics, no DAVE plugins):
+    ros2 launch auv_bringup sim_mission.launch.py world:=$HOME/auv_ws/camera_test.sdf
+-->
+<sdf version="1.9">
+  <world name="auv_pool_world">
+
+    <!-- ============================================================
+         PHYSICS & PLUGINS
+    ============================================================ -->
+    <!-- Zero gravity — neutral buoyancy by suspension, same as camera_test.sdf.
+         The AUV holds its spawn depth with no force acting on it. If the
+         buoyancy plugin below is ever enabled, this must become 0 0 -9.81 and
+         <gravity>0</gravity> must come off base_link in auv_box/model.sdf;
+         weight and buoyancy only cancel if BOTH are switched on together. -->
+    <gravity>0 0 0</gravity>
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+
+    <!-- ── DAVE graded buoyancy — DISABLED ─────────────────────────────────
+         Off for now: the AUV holds depth via zero gravity instead, exactly as
+         it did in camera_test.sdf. Kept here, with its arithmetic, because
+         turning it on later is otherwise a pile of rediscovery.
+
+         TO ENABLE, three things must change together:
+           1. Uncomment this plugin.
+           2. Set <gravity>0 0 -9.81</gravity> above.
+           3. Remove <gravity>0</gravity> from base_link in auv_box/model.sdf,
+              and add back the buoyancy_link described in step 4.
+         Doing only some of these makes the AUV either sink or fly.
+
+           4. Buoyancy needs its OWN link on the AUV — it cannot share
+              base_link. Gazebo derives displaced volume from collision
+              geometry, and base_link_collision is the STL bounding box
+              (0.9206 x 0.8260 x 0.5814 = 0.4421 m^3). That box is right for
+              contact against walls and gate posts but wrong as displacement:
+              at 1025 kg/m^3 it is 453 kg of lift on an 11.7 kg vehicle, about
+              38 g straight up. An open-frame AUV displaces far less than its
+              bounding box because water flows through the frame. For neutral:
+                  V = mass / density = 11.7364 / 1025 = 0.011450146 m^3
+                  cube side = V^(1/3)                 = 0.225391 m
+                  weight = buoyancy = 115.1341 N
+              Put that cube on a near-massless link with collide_bitmask 0x00
+              so it displaces water without ever generating contacts, offset
+              ~0.05 m above the centre of mass for a passive righting moment.
+
+         <enable> is a WHITELIST: when present, ONLY the listed entities get
+         buoyancy — which is how the dedicated link gets it and base_link's
+         contact box does not. A dynamic object added later (dropped marker,
+         floating buoy) will not float until it is listed here too. -->
+    <!--
+    <plugin filename="gz-sim-buoyancy-system" name="gz::sim::systems::Buoyancy">
+      <graded_buoyancy>
+        <default_density>1025</default_density>
+        <density_change>
+          <above_depth>0</above_depth>
+          <density>1</density>
+        </density_change>
+      </graded_buoyancy>
+      <enable>auv_box::buoyancy_link</enable>
+    </plugin>
+    -->
+
+    <!-- ── DAVE ocean current ──────────────────────────────────────────────
+         CURRENT IS OFF BY DEFAULT (mean velocity 0 m/s) so this world starts
+         out behaving exactly like camera_test.sdf.
+
+         To enable a current, raise <velocity><mean> below. A competition pool
+         has no real current, but a small one (0.05-0.15 m/s) is a cheap way to
+         test whether the gate/green navigators hold station under disturbance.
+
+         NOTE: the current will not physically push the AUV until the
+         VelocityControl plugin is removed from auv_box (see model.sdf). Until
+         then the plugin's value is that it PUBLISHES the current on ROS, so
+         nodes can read and compensate for it.
+
+         Gauss-Markov constraints enforced by the plugin — violating any of
+         these logs gzerr at load:  min < max,  min <= mean <= max,
+         0 <= mu < 1,  0 <= noiseAmp < 1. -->
+    <plugin filename="OceanCurrentWorldPlugin" name="dave_gz_world_plugins::OceanCurrentWorldPlugin">
+      <namespace>hydrodynamics</namespace>
+
+      <constant_current>
+        <!-- MANDATORY BLOCK — see header comment. Do not delete. -->
+        <use_constant_current>true</use_constant_current>
+        <topic>ocean_current</topic>
+
+        <velocity>
+          <mean>0.0</mean>
+          <min>0.0</min>
+          <max>1.0</max>
+          <mu>0.0</mu>
+          <noiseAmp>0.0</noiseAmp>
+        </velocity>
+
+        <horizontal_angle>
+          <mean>0.0</mean>
+          <min>-3.141592653589793238</min>
+          <max>3.141592653589793238</max>
+          <mu>0.0</mu>
+          <noiseAmp>0.0</noiseAmp>
+        </horizontal_angle>
+
+        <vertical_angle>
+          <mean>0.0</mean>
+          <min>-3.141592653589793238</min>
+          <max>3.141592653589793238</max>
+          <mu>0.0</mu>
+          <noiseAmp>0.0</noiseAmp>
+        </vertical_angle>
+      </constant_current>
+
+      <!-- MANDATORY BLOCK — see header comment. Do not delete.
+           Unused here: a 5 m pool has no depth-stratified current. The named
+           CSV ships with dave_worlds and is only read, never applied, while
+           the transient current stays unrequested. -->
+      <transient_current>
+        <topic_stratified>stratified_current_velocity</topic_stratified>
+        <databasefileName>transientOceanCurrentDatabase.csv</databasefileName>
+      </transient_current>
+
+      <!-- <tidal_oscillation> deliberately omitted — tides are meaningless in a
+           25 m pool, and the block would require a <mean_direction> child. It
+           is the one optional child of this plugin that IS properly guarded. -->
+    </plugin>
+
+    <!-- Bridges the current onto ROS topics under /hydrodynamics. -->
+    <plugin filename="OceanCurrentPlugin" name="dave_ros_gz_plugins::OceanCurrentPlugin">
+      <namespace>hydrodynamics</namespace>
+    </plugin>
+
+    <!-- ============================================================
+         SCENE & LIGHTING  — unchanged from camera_test.sdf.
+         The HSV green/blue detectors and the YOLO gate detector are tuned
+         against these exact ambient/fog values. Do not retune casually.
+    ============================================================ -->
+    <scene>
+      <ambient>0.35 0.55 0.75 1</ambient>
+      <background>0.05 0.25 0.45 1</background>
+      <shadows>true</shadows>
+
+      <!-- ── FOG IS A NO-OP IN GAZEBO HARMONIC. DO NOT TUNE IT. ──────────
+           SDFormat parses <fog> because it is in the scene spec, so this block
+           loads without complaint and looks like it is doing something. It is
+           not. The ogre2 render engine never implements it: grepping
+           libgz-rendering8-ogre2.so and libgz-sim8.so for "fog" returns zero
+           matches, and a camera placed 18 m from the red drums with
+           start=1.5 end=18.0 still rendered them fully saturated.
+
+           This is worth knowing because fog is the obvious lever to reach for
+           to make camera feeds look underwater — distance-based attenuation is
+           exactly the right cue — and it silently does nothing.
+
+           Kept, rather than deleted, so nobody re-adds it expecting an effect.
+
+           WHAT ACTUALLY WORKS for the underwater look:
+             1. The water_volume visual below. A flat tint, not distance-based,
+                but it does apply to camera sensors and it does show up.
+             2. DAVE's UnderwaterCamera plugin, which is the physically correct
+                option: per-channel Beer-Lambert, out = e*in + (1-e)*background
+                with e = exp(-range * attenuation). It needs the sensors
+                converted to rgbd_camera and republishes on <topic>/simulated_image,
+                so adopting it means rewiring the bridge and every vision node. -->
+      <fog>
+        <type>linear</type>
+        <color>0.05 0.25 0.50 1.0</color>
+        <start>1.5</start>
+        <end>18.0</end>
+      </fog>
+    </scene>
+
+    <light type="directional" name="sun">
+      <pose>14 12.5 20 0 0.4 0</pose>
+      <diffuse>0.9 0.95 1.0 1</diffuse>
+      <specular>0.3 0.35 0.4 1</specular>
+      <direction>-0.2 0.1 -1</direction>
+      <cast_shadows>true</cast_shadows>
+    </light>
+
+    <light type="point" name="fill_light">
+      <pose>14 12.5 -1 0 0 0</pose>
+      <diffuse>0.3 0.5 0.7 1</diffuse>
+      <specular>0.1 0.15 0.2 1</specular>
+      <attenuation>
+        <range>40</range>
+        <constant>0.5</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+    </light>
+
+    <!-- ============================================================
+         POOL ARCHITECTURE (28m X, 25m Y)
+         All static — real gravity does not move them.
+    ============================================================ -->
+    <model name="pool_floor">
+      <static>true</static>
+      <pose>14 12.5 -5.1 0 0 0</pose>
+      <link name="link">
+        <collision name="floor_collision">
+          <geometry><box><size>28 25 0.2</size></box></geometry>
+        </collision>
+        <visual name="floor_visual">
+          <geometry><box><size>28 25 0.2</size></box></geometry>
+          <material>
+            <ambient>0.12 0.18 0.25 1</ambient>
+            <diffuse>0.15 0.22 0.32 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- North Wall (Top of map) -->
+    <model name="pool_wall_north">
+      <static>true</static>
+      <pose>14 25.1 -2.2 0 0 0</pose>
+      <link name="link">
+        <collision name="wall_collision"><geometry><box><size>28 0.2 5.6</size></box></geometry></collision>
+        <visual name="wall_visual"><geometry><box><size>28 0.2 5.6</size></box></geometry>
+          <material><ambient>0.18 0.28 0.40 1</ambient><diffuse>0.20 0.32 0.46 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- South Wall (Bottom of map) -->
+    <model name="pool_wall_south">
+      <static>true</static>
+      <pose>14 -0.1 -2.2 0 0 0</pose>
+      <link name="link">
+        <collision name="wall_collision"><geometry><box><size>28 0.2 5.6</size></box></geometry></collision>
+        <visual name="wall_visual"><geometry><box><size>28 0.2 5.6</size></box></geometry>
+          <material><ambient>0.18 0.28 0.40 1</ambient><diffuse>0.20 0.32 0.46 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- East Wall (Right of map) -->
+    <model name="pool_wall_east">
+      <static>true</static>
+      <pose>28.1 12.5 -2.2 0 0 0</pose>
+      <link name="link">
+        <collision name="wall_collision"><geometry><box><size>0.2 25 5.6</size></box></geometry></collision>
+        <visual name="wall_visual"><geometry><box><size>0.2 25 5.6</size></box></geometry>
+          <material><ambient>0.18 0.28 0.40 1</ambient><diffuse>0.20 0.32 0.46 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- West Wall (Left of map) -->
+    <model name="pool_wall_west">
+      <static>true</static>
+      <pose>-0.1 12.5 -2.2 0 0 0</pose>
+      <link name="link">
+        <collision name="wall_collision"><geometry><box><size>0.2 25 5.6</size></box></geometry></collision>
+        <visual name="wall_visual"><geometry><box><size>0.2 25 5.6</size></box></geometry>
+          <material><ambient>0.18 0.28 0.40 1</ambient><diffuse>0.20 0.32 0.46 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- THE WATER VISIBILITY SYSTEM
+         ===========================
+         The water_volume visual previously used visibility_flags=0xFFFFFFFE to
+         hide it from AUV cameras (bit 0 cleared). This was intended to keep the
+         cameras pixel-identical to the old camera_test.sdf frames.
+
+         HOWEVER: visibility_flags in Gazebo Harmonic's ogre2 renderer is
+         unreliable. In practice it often makes visuals completely invisible
+         to ALL cameras (including the GUI), not just the ones with a matching
+         mask, making the pool look empty.
+
+         The flag has been REMOVED. The water_volume now renders for everyone:
+           GUI camera  → sees blue water (correct)
+           AUV cameras → also see blue water tint (acceptable)
+
+         The AUV camera visibility_mask lines in models/auv_box/model.sdf are
+         already commented out, so the cameras use the default all-bits mask.
+
+         WANT THE CAMERAS TO SEE CLEAR WATER (no blue tint)? The only reliable
+         way in Gazebo Harmonic is DAVE's UnderwaterCamera plugin, which does
+         per-pixel Beer-Lambert attenuation in a post-process pass. -->
+
+    <!-- WHY THE WALLS ARE 5.6 m TALL, NOT 5.0
+         The walls originally spanned -5..0, flush with the water surface. With
+         the water filling the pool exactly to the rim, EVERY visible surface is
+         below the waterline, so there is no dry reference to contrast against
+         and the pool just reads as being a different colour — which is why
+         earlier attempts at "add water" looked like nothing had happened, no
+         matter how the transparency was tuned.
+
+         Raising the walls to -5..+0.6 leaves a 0.6 m dry lip above the water.
+         That waterline is the cue that makes the pool read as full. Verified by
+         rendering: same water settings, walls flush = invisible, walls raised =
+         obviously a pool of water.
+
+         The surface itself is DAVE's ocean, included below. -->
+
+    <!-- ── DAVE OCEAN SURFACE ──────────────────────────────────────────────
+         The same Coast Water model dave_ocean_waves.world uses. This replaces
+         an earlier hand-rolled flat plane at z=0; keeping both would z-fight,
+         since they occupy the same height.
+
+         It is genuinely animated, not a static texture: the model carries a
+         gz-sim-shader-param-system plugin running a Gerstner-wave GLSL shader
+         with t bound to TIME, plus a scrolling normal map and a cube-map
+         reflection. The mesh is 6 km x 6 km and 34k vertices, so the pool sits
+         in open ocean stretching to the horizon.
+
+         Already in the local Fuel cache (~/.gz/fuel), so this does NOT need
+         network access at launch. If the cache is ever cleared, the first run
+         will try to re-download it.
+
+         TWO THINGS TO KNOW, both verified by rendering:
+
+         1. IT HIDES THE POOL FROM DIRECTLY ABOVE. A 6 km opaque sheet at z=0
+            covers the arena. To watch a mission, orbit the GUI camera BELOW
+            the waterline — scroll in past z=0 and the pool interior is clear.
+            The default GUI camera is not set here on purpose: overriding it
+            requires declaring a full <gui> block with every default plugin,
+            and a partial one silently drops the entity tree and play controls.
+
+         2. IT IS INVISIBLE FROM UNDERWATER. The mesh is single-sided with
+            normals up, so from below there is nothing to see. It adds a great
+            deal above the surface and nothing beneath it. The underwater look
+            comes from the haze post-process instead (auv_vision
+            underwater_view_node), not from this.
+
+         WANT BIGGER, GEOMETRIC WAVES? The model ships with <Nwaves>0</Nwaves>,
+         which disables the vertex-displacement loop entirely and leaves only
+         the scrolling normal map. Its amplitude/wavenumber/omega/dir params are
+         all populated for 3 wave components. To switch them on, copy the model
+         out of the Fuel cache into this package and set Nwaves to 3. Note the
+         waves are 0.42 m amplitude and will intersect the 0.6 m pool rim. -->
+    <include>
+      <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Coast Water</uri>
+      <pose>14 12.5 0 0 0 0</pose>
+    </include>
+
+    <!-- The body of water: 0 to -5 m, inset 2 cm from every pool surface so its
+         faces never coincide with the floor or walls and z-fight with them.
+             X 0.02 .. 27.98   (27.96 wide, centre 14)
+             Y 0.02 .. 24.98   (24.96 deep, centre 12.5)
+             Z -0.02 .. -4.98  (4.96 tall,  centre -2.5)
+
+         double_sided is what makes this read as water rather than as a blue
+         box: with back faces culled the volume would vanish the moment the GUI
+         camera dropped below the surface. Drawn double-sided, moving the view
+         underwater tints the whole scene, which is the effect you want.
+
+         cast_shadows off — a 28 x 25 m shadow caster would black out the pool
+         floor. render_order 5 puts it after the opaque props so alpha blends
+         over them correctly (surface skin is 6, drawn last of all). -->
+    <model name="water_volume">
+      <static>true</static>
+      <pose>14 12.5 -2.5 0 0 0</pose>
+      <link name="link">
+        <visual name="water_body_visual">
+          <geometry><box><size>27.96 24.96 4.96</size></box></geometry>
+          <!-- COLOUR ALPHA MUST STAY 1.0 — opacity is set by <transparency>
+               ALONE. Measured in ogre2, the two COMPOUND:
+                   effective opacity = (1 - transparency) * diffuse_alpha
+               An earlier version used transparency 0.78 with alpha 0.22, which
+               is 0.22 * 0.22 = 5% opacity: completely invisible, which is why
+               the pool looked empty. Worse, driving opacity from the alpha
+               channel alone renders grey rather than blue — the colour only
+               survives when alpha is 1.0 and <transparency> does the work. -->
+          <material>
+            <ambient>0.00 0.42 0.58 1.0</ambient>
+            <diffuse>0.00 0.62 0.82 1.0</diffuse>
+            <specular>0.05 0.10 0.15 1</specular>
+            <double_sided>true</double_sided>
+            <render_order>5</render_order>
+          </material>
+          <transparency>0.45</transparency>
+          <cast_shadows>false</cast_shadows>
+          <!-- visibility_flags REMOVED: ogre2 in Gazebo Harmonic does not
+               reliably honour this flag and often renders the visual
+               invisible to everyone, including the GUI camera. -->
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================================
+         COMPETITION PROPS — positions unchanged, missions depend on them
+    ============================================================ -->
+
+    <!-- Starting Zone (140cm square, 4m from bottom) -->
+    <model name="starting_zone">
+      <static>true</static>
+      <pose>14 4 -4.99 0 0 0</pose> <!-- Placed slightly above floor to prevent z-fighting -->
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>1.4 1.4 0.02</size></box></geometry>
+          <material><ambient>0.8 0.8 0.8 1</ambient><diffuse>0.8 0.8 0.8 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Gate (Shifted right by 5m, located exactly on the 12m Y line) -->
+    <model name="gate">
+      <static>true</static>
+
+      <!-- Left Post (Black) -->
+      <link name="left_post">
+        <pose>17.5 12 -4.238 0 0 0</pose>
+        <collision name="collision"><geometry><cylinder><radius>0.05</radius><length>1.524</length></cylinder></geometry></collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.05</radius><length>1.524</length></cylinder></geometry>
+          <material><ambient>0 0 0 1</ambient><diffuse>0 0 0 1</diffuse></material>
+        </visual>
+      </link>
+
+      <!-- Right Post (Black) -->
+      <link name="right_post">
+        <pose>20.5 12 -4.238 0 0 0</pose>
+        <collision name="collision"><geometry><cylinder><radius>0.05</radius><length>1.524</length></cylinder></geometry></collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.05</radius><length>1.524</length></cylinder></geometry>
+          <material><ambient>0 0 0 1</ambient><diffuse>0 0 0 1</diffuse></material>
+        </visual>
+      </link>
+
+      <!-- Cross Bar (Black) -->
+      <link name="cross_bar">
+        <pose>19 12 -3.476 0 1.57079632679 0</pose>
+        <collision name="collision"><geometry><cylinder><radius>0.05</radius><length>3.1</length></cylinder></geometry></collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.05</radius><length>3.1</length></cylinder></geometry>
+          <material><ambient>0 0 0 1</ambient><diffuse>0 0 0 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Orange Flare (Located in the 8m-12m zone) -->
+    <model name="flare_orange">
+      <static>true</static>
+      <pose>8 10 -2.5 0 0 0</pose> <!-- Mid-depth hover -->
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.1</radius><length>0.6</length></cylinder></geometry>
+          <material><ambient>1 0.5 0 1</ambient><diffuse>1 0.5 0 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Blue Flare (Main Arena) -->
+    <model name="flare_blue">
+      <static>true</static>
+      <pose>18 15 -2.5 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.1</radius><length>0.6</length></cylinder></geometry>
+          <material><ambient>0 0 1 1</ambient><diffuse>0 0 1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Red Flare (Main Arena) -->
+    <model name="flare_red">
+      <static>true</static>
+      <pose>19 17 -2.5 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.1</radius><length>0.6</length></cylinder></geometry>
+          <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Yellow Flare (Main Arena) -->
+    <model name="flare_yellow">
+      <static>true</static>
+      <pose>21 19 -2.5 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.1</radius><length>0.6</length></cylinder></geometry>
+          <material><ambient>1 1 0 1</ambient><diffuse>1 1 0 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Target Zone (8m x 2m Green Mat at the far end) -->
+    <model name="target_zone">
+      <static>true</static>
+      <pose>10 22 -4.99 0 0 0</pose> <!-- X=10 to offset it leftish as in diagram -->
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>8 2 0.02</size></box></geometry>
+          <material><ambient>0.2 0.8 0.2 1</ambient><diffuse>0.2 0.8 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Target Zone Drums (1 Blue, 3 Red) -->
+    <model name="drum_blue">
+      <static>true</static>
+      <pose>7 22 -4.75 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.3</radius><length>0.5</length></cylinder></geometry>
+          <material><ambient>0 0 1 1</ambient><diffuse>0 0 1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="drum_red_1">
+      <static>true</static>
+      <pose>9 22 -4.75 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.3</radius><length>0.5</length></cylinder></geometry>
+          <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="drum_red_2">
+      <static>true</static>
+      <pose>11 22 -4.75 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.3</radius><length>0.5</length></cylinder></geometry>
+          <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="drum_red_3">
+      <static>true</static>
+      <pose>13 22 -4.75 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.3</radius><length>0.5</length></cylinder></geometry>
+          <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- QR-Coded Objects (Approximated as boxes on the right side) -->
+    <model name="qr_box_1">
+      <static>true</static>
+      <pose>23 10 -4.75 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>0.5 0.5 0.5</size></box></geometry>
+          <material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="qr_box_2">
+      <static>true</static>
+      <pose>25 8 -4.75 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>0.5 0.5 0.5</size></box></geometry>
+          <material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+  </world>
+</sdf>

@@ -1,7 +1,7 @@
 # AUV Gate Mission — Run Guide
 
 # ════════════════════════════════════════════════════════════
-# OPTION A — Single launch file (recommended)
+# OPTION A1 — Full mission (gate → green mat)
 # Starts everything automatically in the correct order.
 # Wait ~14 seconds for all nodes to come up.
 # ════════════════════════════════════════════════════════════
@@ -9,7 +9,15 @@ source ~/auv_ws/install/setup.bash
 ros2 launch auv_bringup sim_mission.launch.py
 
 # Custom spawn position (optional args):
-# ros2 launch auv_bringup sim_mission.launch.py spawn_x:=0.0 spawn_y:=0.0 spawn_yaw:=0.0
+# ros2 launch auv_bringup sim_mission.launch.py spawn_x:=14.0 spawn_y:=4.0 spawn_z:=-4.238 spawn_yaw:=1.57
+
+# ════════════════════════════════════════════════════════════
+# OPTION A2 — Post-gate only (green-mat pipeline, no gate nodes)
+# AUV spawns past the gate; green navigator is triggered immediately.
+# Use this to test/tune green detection without running the full mission.
+# ════════════════════════════════════════════════════════════
+# Custom spawn position past gate (optional args):
+# ros2 launch auv_bringup sim_post_gate.launch.py spawn_x:=10.0 spawn_y:=10.0 spawn_z:=-4.238 spawn_yaw:=1.57
 
 # ════════════════════════════════════════════════════════════════════════
 # OPTION B — Manual terminals (use for debugging individual nodes)
@@ -44,8 +52,8 @@ ros2 run ros_gz_sim create \
   -world camera_world \
   -file ~/auv_ws/install/auv_description/share/auv_description/models/auv_box/model.sdf \
   -name auv_box \
-  -x -5 -y -4 -z 0.15 \
-  -Y 2.7
+  -x -5 -y 0 -z 1.5 \
+  -Y 0
 
 # ════════════════════════════════════════════════════════════
 # TERMINAL 3 — ROS <-> Gazebo bridge

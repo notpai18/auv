@@ -1,33 +1,282 @@
 <?xml version="1.0"?>
-<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="auv">
 
-  <!-- Define the color blue -->
-  <material name="blue">
-    <color rgba="0 0 1 1"/>
-  </material>
+  <!-- ============================================================
+       AUV Description — Real Body (SolidWorks export, URDF_AUV)
+       Thrusters are FIXED (visual-only) — no actuation yet.
+       Gazebo motion is handled by the SDF plugins in model.sdf.
+       ============================================================ -->
 
-  <!-- Base Link -->
+  <!-- ── Base Link ─────────────────────────────────────────────── -->
   <link name="base_link">
+    <inertial>
+      <!-- Design-team CAD inertia (dry, no electronics).
+           Gazebo physics uses model.sdf values (74 kg, tuned). -->
+      <origin xyz="0.0342192228746154 -1.94199123143583E-05 0.0127520533943641" rpy="0 0 0"/>
+      <mass value="11.7363957459801"/>
+      <inertia
+        ixx="0.0945859213511898"  ixy="-1.27954399069145E-09" ixz="1.21781883017742E-08"
+        iyy="0.225604371478563"   iyz="2.26054612723564E-05"
+        izz="0.215001008980752"/>
+    </inertial>
     <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <box size="0.6 0.4 0.3"/>
+        <mesh filename="package://auv_description/meshes/base_link.STL"/>
       </geometry>
-      <material name="blue"/>
+      <material name="auv_grey">
+        <color rgba="0.753 0.753 0.753 1"/>
+      </material>
     </visual>
-    
     <collision>
+      <!-- Bounding box for performance — matches Gazebo SDF collision -->
+      <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
         <box size="0.6 0.4 0.3"/>
       </geometry>
     </collision>
-
-    <inertial>
-      <mass value="10.0"/>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <inertia ixx="0.20833" ixy="0.0" ixz="0.0" 
-               iyy="0.375" iyz="0.0" 
-               izz="0.43333"/>
-    </inertial>
   </link>
+
+  <!-- ── Thruster 1 (front-right lateral) ─────────────────────── -->
+  <link name="Thruster_1">
+    <inertial>
+      <origin xyz="-1.65261599477384E-06 4.99471065226521E-06 0.0174916530415489" rpy="0 0 0"/>
+      <mass value="0.00833118469080807"/>
+      <inertia
+        ixx="2.336270955557E-06"  ixy="-8.35767577810584E-10" ixz="7.03744732827365E-12"
+        iyy="2.3347158066628E-06" iyz="-1.37241579121037E-10"
+        izz="3.44436528248629E-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://auv_description/meshes/Thruster_1.STL"/>
+      </geometry>
+      <material name="auv_blue_grey">
+        <color rgba="0.792 0.820 0.933 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://auv_description/meshes/Thruster_1.STL"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="T_1" type="fixed">
+    <origin xyz="0.32408 -0.29242 0.0127" rpy="-1.5708 0 -0.7854"/>
+    <parent link="base_link"/>
+    <child link="Thruster_1"/>
+  </joint>
+
+  <!-- ── Thruster 2 (front-left lateral) ──────────────────────── -->
+  <link name="Thruster_2">
+    <inertial>
+      <origin xyz="1.65437038701644E-06 -4.64870150475552E-06 0.0174915297990355" rpy="0 0 0"/>
+      <mass value="0.0083309095305768"/>
+      <inertia
+        ixx="2.33619111235207E-06"  ixy="-8.13820508046538E-10" ixz="2.16077489496312E-12"
+        iyy="2.33467203295439E-06"  iyz="1.37258136855E-10"
+        izz="3.44424719160246E-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://auv_description/meshes/Thruster_2.STL"/>
+      </geometry>
+      <material name="auv_blue_grey"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://auv_description/meshes/Thruster_2.STL"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="T_2" type="fixed">
+    <origin xyz="0.32408 0.29242 0.0127" rpy="-1.5708 0 -2.3562"/>
+    <parent link="base_link"/>
+    <child link="Thruster_2"/>
+  </joint>
+
+  <!-- ── Thruster 3 (rear-left lateral) ───────────────────────── -->
+  <link name="Thruster_3">
+    <inertial>
+      <origin xyz="-1.65275507435503E-06 4.99561164989342E-06 0.0174916528698197" rpy="0 0 0"/>
+      <mass value="0.00833118544573367"/>
+      <inertia
+        ixx="2.33627107575189E-06"  ixy="-8.35829351221407E-10" ixz="7.03713510409423E-12"
+        iyy="2.33471595253492E-06"  iyz="-1.37225448573827E-10"
+        izz="3.44436552755622E-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://auv_description/meshes/Thruster_3.STL"/>
+      </geometry>
+      <material name="auv_blue_grey"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://auv_description/meshes/Thruster_3.STL"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="T_3" type="fixed">
+    <origin xyz="-0.36742 -0.24908 0.0127" rpy="-1.5708 0 -2.3562"/>
+    <parent link="base_link"/>
+    <child link="Thruster_3"/>
+  </joint>
+
+  <!-- ── Thruster 4 (rear-right lateral) ──────────────────────── -->
+  <link name="Thruster_4">
+    <inertial>
+      <origin xyz="1.65294304066421E-06 -4.99563727989594E-06 0.0174916529089585" rpy="0 0 0"/>
+      <mass value="0.00833118551321169"/>
+      <inertia
+        ixx="2.33627107978296E-06"  ixy="-8.35819036247804E-10" ixz="-7.04411608420655E-12"
+        iyy="2.33471600006088E-06"  iyz="1.37226123192799E-10"
+        izz="3.44436557807613E-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://auv_description/meshes/Thruster_4.STL"/>
+      </geometry>
+      <material name="auv_blue_grey"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://auv_description/meshes/Thruster_4.STL"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="T_4" type="fixed">
+    <origin xyz="-0.36742 0.24908 0.0127" rpy="-1.5708 0 -0.7854"/>
+    <parent link="base_link"/>
+    <child link="Thruster_4"/>
+  </joint>
+
+  <!-- ── Thruster 5 (front-right vertical) ────────────────────── -->
+  <link name="Thruster_5">
+    <inertial>
+      <origin xyz="-3.6863806380516E-06 8.46465535830898E-07 0.0174900849150032" rpy="0 0 0"/>
+      <mass value="0.00833000566535425"/>
+      <inertia
+        ixx="2.33425913476674E-06"  ixy="7.48421679256586E-10" ixz="1.92758887060273E-10"
+        iyy="2.33610424707547E-06"  iyz="-2.91386562802566E-11"
+        izz="3.44368285352484E-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://auv_description/meshes/Thruster_5.STL"/>
+      </geometry>
+      <material name="auv_blue_grey"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://auv_description/meshes/Thruster_5.STL"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="T_5" type="fixed">
+    <origin xyz="0.125 -0.3647 0.043352" rpy="3.1416 0 0"/>
+    <parent link="base_link"/>
+    <child link="Thruster_5"/>
+  </joint>
+
+  <!-- ── Thruster 6 (front-left vertical) ─────────────────────── -->
+  <link name="Thruster_6">
+    <inertial>
+      <origin xyz="-3.68618776502849E-06 8.46651816377442E-07 0.017490084893384" rpy="0 0 0"/>
+      <mass value="0.00833000590070646"/>
+      <inertia
+        ixx="2.33425915543199E-06"  ixy="7.48410125056161E-10" ixz="1.92744361940537E-10"
+        iyy="2.3361043816148E-06"   iyz="-2.91383064301683E-11"
+        izz="3.44368300051176E-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://auv_description/meshes/Thruster_6.STL"/>
+      </geometry>
+      <material name="auv_blue_grey"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://auv_description/meshes/Thruster_6.STL"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="T_6" type="fixed">
+    <origin xyz="0.125 0.3647 -0.017952" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="Thruster_6"/>
+  </joint>
+
+  <!-- ── Thruster 7 (rear-right vertical) ─────────────────────── -->
+  <link name="Thruster_7">
+    <inertial>
+      <origin xyz="3.6869923764199E-06 -8.46168067669684E-07 -0.0144306650891859" rpy="0 0 0"/>
+      <mass value="0.00833000548921405"/>
+      <inertia
+        ixx="2.33425912617549E-06"  ixy="7.48490073203615E-10" ixz="-1.92750385646878E-10"
+        iyy="2.33610414811803E-06"  iyz="2.91392307973813E-11"
+        izz="3.4436827435088E-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://auv_description/meshes/Thruster_7.STL"/>
+      </geometry>
+      <material name="auv_blue_grey"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://auv_description/meshes/Thruster_7.STL"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="T_7" type="fixed">
+    <origin xyz="-0.125 -0.3647 0.013969" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="Thruster_7"/>
+  </joint>
+
+  <!-- ── Thruster 8 (rear-left vertical) ──────────────────────── -->
+  <link name="Thruster_8">
+    <inertial>
+      <origin xyz="3.68574605190408E-06 -8.4483347090325E-07 0.0174900844014666" rpy="0 0 0"/>
+      <mass value="0.00833000455285214"/>
+      <inertia
+        ixx="2.3342587508269E-06"   ixy="7.48277153768253E-10" ixz="-1.92713144617754E-10"
+        iyy="2.33610413101085E-06"  iyz="2.90648705679754E-11"
+        izz="3.44368238303659E-06"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://auv_description/meshes/Thruster_8.STL"/>
+      </geometry>
+      <material name="auv_blue_grey"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://auv_description/meshes/Thruster_8.STL"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="T_8" type="fixed">
+    <origin xyz="-0.125 0.3647 0.043352" rpy="3.1416 0 0"/>
+    <parent link="base_link"/>
+    <child link="Thruster_8"/>
+  </joint>
 
 </robot>

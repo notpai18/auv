@@ -3,35 +3,50 @@
   <model name="auv_box">
     
     <link name="base_link">
+      <!-- Gravity OFF — the vehicle holds whatever depth it is placed at.
+           Both worlds (camera_test.sdf and the DAVE worlds/dave_pool.sdf) set
+           world gravity to zero to match, so the AUV hovers at its spawn z with
+           no buoyancy force needed to hold it there.
+
+           If real weight-vs-buoyancy is ever wanted, see the commented-out
+           buoyancy block in worlds/dave_pool.sdf — it carries the worked
+           arithmetic and the reason a separate displacement link is required. -->
+      <gravity>0</gravity>
       <inertial>
-        <mass>74.0</mass>
+        <!-- Design team CAD mass (dry). Inertia computed for equivalent uniform box -->
+        <mass>11.7364</mass>
         <inertia>
-          <ixx>1.54167</ixx>
+          <ixx>0.997889</ixx>
           <ixy>0.0</ixy>
           <ixz>0.0</ixz>
-          <iyy>2.775</iyy>
+          <iyy>1.159488</iyy>
           <iyz>0.0</iyz>
-          <izz>3.20667</izz>
+          <izz>1.496176</izz>
         </inertia>
       </inertial>
 
       <visual name="base_link_visual">
+        <!-- Real AUV body mesh from design team (SolidWorks export) -->
         <geometry>
-          <box>
-            <size>0.6 0.4 0.3</size>
-          </box>
+          <mesh>
+            <uri>package://auv_description/meshes/base_link.STL</uri>
+          </mesh>
         </geometry>
         <material>
-          <ambient>0 0 1 1</ambient>
-          <diffuse>0 0 1 1</diffuse>
-          <specular>0.1 0.1 0.1 1</specular>
+          <!-- Silver-grey: matches the design team's colour (rgba ~0.753 0.753 0.753) -->
+          <ambient>0.6 0.6 0.6 1</ambient>
+          <diffuse>0.75 0.75 0.75 1</diffuse>
+          <specular>0.3 0.3 0.3 1</specular>
         </material>
       </visual>
 
       <collision name="base_link_collision">
+        <!-- Box sized to real AUV STL bounding box (0.9206 x 0.8260 x 0.5814 m).
+             Pose offset X=0.0494 aligns box centre with mesh centroid. -->
+        <pose>0.0494 0 0.0127 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.6 0.4 0.3</size>
+            <size>0.9206 0.8260 0.5814</size>
           </box>
         </geometry>
       </collision>
@@ -39,7 +54,7 @@
 
     <!-- Camera 1 - Front Left -->
     <link name="front_left_camera_link">
-      <pose relative_to="base_link">0.3 0.06 0 0 0 0</pose>
+      <pose relative_to="base_link">0.50 0.0375 0 0 0 0</pose>
       <inertial>
         <mass>0.0001</mass>
         <inertia>
@@ -48,20 +63,50 @@
           <izz>0.0001</izz>
         </inertia>
       </inertial>
+      <visual name="front_left_camera_visual">
+        <pose>0 -0.0375 0 0 0 0</pose>
+        <geometry>
+          <box>
+            <!-- OAK-D Lite dimensions: 17.5mm (depth) x 91mm (width) x 28mm (height) -->
+            <size>0.0175 0.091 0.028</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 0 0 1</ambient>
+          <diffuse>1 0 0 1</diffuse>
+          <specular>0.1 0 0 1</specular>
+        </material>
+      </visual>
       <sensor name="front_left_camera_sensor" type="camera">
         <update_rate>15</update_rate>
         <visualize>false</visualize>
         <always_on>true</always_on>
         <topic>/model/auv_box/stereo_front/left/image_raw</topic>
         <camera>
-          <horizontal_fov>1.05</horizontal_fov>
+          <!-- WATER VISIBILITY TOGGLE (all three cameras — keep them in sync)
+
+               Uncommented, mask 0x00000001 hides the two water visuals in
+               worlds/dave_pool.sdf, which clear bit 0 (0xFFFFFFFE). The pool
+               then looks filled in the GUI while these frames stay
+               pixel-identical to the ones YOLO and the HSV thresholds were
+               tuned on.
+
+               Left commented, the cameras use the default all-bits mask and
+               DO see the water, so the feeds get the blue cast that goes with
+               the scene fog. That is the intended state: the feeds should look
+               like they are underwater.
+
+               Re-comment these three lines if detection accuracy drops and you
+               want the old clear-water frames back. -->
+          <!-- <visibility_mask>1</visibility_mask> -->
+          <horizontal_fov>1.274</horizontal_fov>
           <image>
             <width>640</width>
             <height>480</height>
           </image>
           <clip>
-            <near>0.1</near>
-            <far>10.0</far>
+            <near>0.2</near>
+            <far>19.1</far>
           </clip>
         </camera>
       </sensor>
@@ -74,7 +119,7 @@
 
     <!-- Camera 2 - Front Right -->
     <link name="front_right_camera_link">
-      <pose relative_to="base_link">0.3 -0.06 0 0 0 0</pose>
+      <pose relative_to="base_link">0.50 -0.0375 0 0 0 0</pose>
       <inertial>
         <mass>0.0001</mass>
         <inertia>
@@ -89,14 +134,17 @@
         <always_on>true</always_on>
         <topic>/model/auv_box/stereo_front/right/image_raw</topic>
         <camera>
-          <horizontal_fov>1.05</horizontal_fov>
+          <!-- Water visibility toggle — see front_left_camera_sensor above.
+               MUST match the left camera exactly or stereo disparity breaks. -->
+          <!-- <visibility_mask>1</visibility_mask> -->
+          <horizontal_fov>1.274</horizontal_fov>
           <image>
             <width>640</width>
             <height>480</height>
           </image>
           <clip>
-            <near>0.1</near>
-            <far>10.0</far>
+            <near>0.2</near>
+            <far>19.1</far>
           </clip>
         </camera>
       </sensor>
@@ -107,7 +155,68 @@
       <child>front_right_camera_link</child>
     </joint>
 
-    <!-- Hydrodynamics Plugin -->
+    <!-- Camera 3 - Bottom -->
+    <link name="bottom_camera_link">
+      <pose relative_to="base_link">0 0 -0.28 0 1.5708 0</pose>
+      <inertial>
+        <mass>0.0001</mass>
+        <inertia>
+          <ixx>0.0001</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>0.0001</iyy><iyz>0</iyz>
+          <izz>0.0001</izz>
+        </inertia>
+      </inertial>
+      <visual name="bottom_camera_visual">
+        <geometry>
+          <box>
+            <size>0.0175 0.091 0.028</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 0 0 1</ambient>
+          <diffuse>1 0 0 1</diffuse>
+          <specular>0.1 0 0 1</specular>
+        </material>
+      </visual>
+      <sensor name="bottom_camera_sensor" type="camera">
+        <update_rate>15</update_rate>
+        <visualize>false</visualize>
+        <always_on>true</always_on>
+        <topic>/model/auv_box/bottom/image_raw</topic>
+        <camera>
+          <!-- Water visibility toggle — see front_left_camera_sensor above.
+               WATCH THIS ONE FIRST: it looks down at the green target mat and
+               the drums from close range, so the HSV green/blue segmentation is
+               the most likely thing to need retuning now that the water is
+               visible. Being close to the mat, fog affects it least, so a
+               narrower HSV hue shift is expected here than on the front pair. -->
+          <!-- <visibility_mask>1</visibility_mask> -->
+          <horizontal_fov>1.274</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+          </image>
+          <clip>
+            <near>0.2</near>
+            <far>19.1</far>
+          </clip>
+        </camera>
+      </sensor>
+    </link>
+    
+    <joint name="bottom_camera_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>bottom_camera_link</child>
+    </joint>
+
+    <!-- Hydrodynamics Plugin (added-mass + drag, Fossen model)
+         Coefficients are DAVE's bluerov2 values.
+
+         HEADS UP: these coefficients currently have NO EFFECT on motion. The
+         VelocityControl plugin below sets the model's velocity directly every
+         physics step, which overwrites whatever forces hydrodynamics or ocean
+         current apply. Drag becomes real the moment VelocityControl is swapped
+         for thrusters. -->
     <plugin filename="gz-sim-hydrodynamics-system" name="gz::sim::systems::Hydrodynamics">
       <link_name>base_link</link_name>
       <water_density>1025.0</water_density>
@@ -123,12 +232,48 @@
       <nRabsR>-3.992</nRabsR>
     </plugin>
 
-    <!-- Velocity Control Plugin -->
+    <!-- Velocity Control Plugin — KINEMATIC DRIVE
+         Sets the model's velocity directly from /model/auv_box/cmd_vel rather
+         than applying thrust. The vehicle therefore tracks commanded velocity
+         perfectly and ignores every fluid force acting on it — hydrodynamic
+         drag and ocean current alike.
+
+         This is deliberate. The gate and green navigators assume exact velocity
+         tracking, so keeping this plugin is what lets the DAVE water migration
+         land without retuning a single FSM.
+
+         TO GET REAL WATER DYNAMICS ON THE VEHICLE (phase 2):
+           1. Delete this plugin.
+           2. Add one gz-sim-thruster-system per thruster. The eight meshes are
+              already in meshes/Thruster_1..8.STL but have no links in this SDF.
+           3. Implement thrust allocation in auv_propulsion (currently an empty
+              stub package: CMakeLists.txt and package.xml only, no source).
+           4. Implement a closed-loop cmd_vel PID in auv_controls (also an empty
+              stub) so the navigators' existing cmd_vel interface still works.
+           5. Uncomment the OceanCurrentModelPlugin block below.
+         Only after step 1 do the hydrodynamics coefficients above and the
+         world's ocean current start affecting motion. -->
     <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl">
       <topic>/model/auv_box/cmd_vel</topic>
       <initial_linear>0 0 0</initial_linear>
       <initial_angular>0 0 0</initial_angular>
     </plugin>
+
+    <!-- DAVE Ocean Current — applies the world's current as a force on the hull.
+         Commented out because VelocityControl above would ignore it anyway;
+         enabling it now would only cost CPU. Uncomment as part of phase 2.
+         Requires dave_ws sourced so the plugin library is on
+         GZ_SIM_SYSTEM_PLUGIN_PATH. The namespace and topic must match the
+         OceanCurrentWorldPlugin in worlds/dave_pool.sdf. -->
+    <!--
+    <plugin filename="OceanCurrentModelPlugin"
+            name="dave_gz_model_plugins::OceanCurrentModelPlugin">
+      <namespace>auv_box</namespace>
+      <flow_velocity_topic>ocean_current</flow_velocity_topic>
+      <link_name>base_link</link_name>
+      <base_link_name>auv_box/base_link</base_link_name>
+    </plugin>
+    -->
 
     <!-- Odometry Publisher Plugin -->
     <plugin filename="gz-sim-odometry-publisher-system" name="gz::sim::systems::OdometryPublisher">

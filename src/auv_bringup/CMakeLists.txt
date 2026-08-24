@@ -8,8 +8,14 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 
-# Install launch files so ros2 launch can find them
+# Install launch files so ros2 launch can find themext install moonshot-ai.kimi-code
 install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+# Install config files (sim_params.yaml, real_params.yaml) so
+# get_package_share_directory('auv_bringup') resolves them at runtime
+install(DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
 )
 

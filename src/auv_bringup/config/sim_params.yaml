@@ -1,0 +1,188 @@
+# ============================================================
+# sim_params.yaml  —  Simulation parameter overrides
+# ============================================================
+# Loaded by sim_mission.launch.py for every mission node.
+# All values here match the Gazebo model (auv_box / camera_test.sdf).
+# For real hardware, use real_params.yaml instead.
+# ============================================================
+
+gate_navigator_v2_node:
+  ros__parameters:
+    # Detection quality gate
+    confidence_threshold:    0.10    # Min YOLO conf to accept a gate update
+    # State-machine geometry
+    commit_distance:         5.5     # m — switch TRACK → ALIGN
+    commit_ticks_required:   5       # consecutive ticks inside commit zone
+    align_threshold:         0.05    # rad — aligned when |yaw_error| < this
+    align_ticks_required:    8       # ticks to hold alignment before advancing
+    cross_overshoot:         2.5     # m — extra distance past gate center in CROSS
+    gate_odom_freeze_dist:   0.0     # m — stop updating gate_odom below this range
+    max_gate_odom_jump:      1.0     # m — max allowed gate_odom shift per YOLO update
+    # Camera mounting (matches model.sdf left camera pose)
+    cam_offset_fwd:          0.500   # m — camera forward of base_link
+    cam_offset_left:         0.0375  # m — camera left of base_link
+    # Timing
+    stop_pause_ticks:        20      # ticks to pause at STOP (~2 s at 10 Hz)
+    yolo_freshness_sec:      1.5     # s — max YOLO age to be considered "fresh"
+    # Velocity / gains
+    search_strafe_speed:     0.15    # m/s   — SEARCH lateral speed
+    search_sweep_dist:       6.0     # m     — SEARCH lateral distance limit
+    track_speed:             0.15    # m/s   — TRACK forward speed
+    cross_speed:             0.20    # m/s   — CROSS / RETURN_CROSS forward speed
+    track_p_gain:            1.5     # P-gain for heading correction in TRACK
+    align_p_gain:            4.0     # P-gain for rotation in ALIGN states
+    angular_clamp:           0.30    # rad/s — max angular.z command
+
+gate_detector_node:
+  ros__parameters:
+    confidence_threshold:    0.10    # Min YOLO inference confidence to publish
+    debug_image_dir:         ''      # '' = auto (~/.ros/yolo_debug); or set abs path
+    model_weights:           'gate_detection_v8.pt'   # Testing v8 model
+
+gate_localizer_node:
+  ros__parameters:
+    confidence_threshold:    0.10    # Min confidence to compute 3D position
+    stereo_baseline:         0.075   # m — left-right camera centre separation (model.sdf)
+    # Robust disparity sampling
+    patch_radius:            4       # half-size of sampling patch → 9x9 pixels
+    min_valid_pixels:        3       # min valid pixels needed inside a patch
+    # Depth plausibility guard
+    min_depth_m:             0.2     # discard readings closer than this (m)
+    max_depth_m:             19.1    # discard readings farther than this (m)
+
+mission_logger_node:
+  ros__parameters:
+    log_dir:  '~/auv_ws/mission_logs'   # Directory for mission CSV logs
+
+trail_mapper_node:
+  ros__parameters:
+    min_dist_m:   0.10    # m — minimum travel before storing a new pose
+    publish_hz:   1.0     # Hz — how often to publish /auv/trail_map
+    odom_frame:   'map'   # TF frame used in nav_msgs/Path header
+    log_dir:      '~/auv_ws/mission_logs'   # Directory for trail CSV logs
+
+# ── Green mat pipeline ───────────────────────────────────────────────────
+
+green_detector_node:
+  ros__parameters:
+    # HSV range tuned for the sim green mat (uniform bright green)
+    h_low:   40     # OpenCV Hue 0-179
+    h_high:  85
+    s_low:   60     # Saturation 0-255
+    v_low:   60     # Value 0-255
+    min_contour_area: 200   # px² — ignore tiny blobs
+
+green_localizer_node:
+  ros__parameters:
+    stereo_baseline:    0.075   # m — matches gate_localizer (model.sdf)
+    patch_radius:       4       # half-size of depth sampling patch
+    min_valid_pixels:   3       # min valid pixels in patch
+    min_depth_m:        0.2     # m — discard readings closer than this
+    max_depth_m:        15.0    # m — discard readings farther than this
+
+green_navigator_node:
+  ros__parameters:
+    # Trigger: state value published by the gate navigator when done
+    gate_done_value:         'DONE'
+    # Speeds
+    search_spin_speed:       0.12   # rad/s — spin during SEARCH_GREEN
+    approach_speed:          0.30   # m/s   — forward speed in APPROACH_GREEN
+    center_speed:            0.05   # m/s   — speed cap in CENTER_GREEN
+    # P-controller gains
+    approach_p_gain:         1.2
+    center_p_gain:           0.8
+    angular_clamp:           0.20   # rad/s — max angular.z
+    # Phase 2 (bottom camera) transition threshold
+    phase2_coverage_thresh:  0.03   # fraction of frame covered by green
+    # Centering convergence
+    center_threshold_m:      0.30   # m — error below this counts as centred
+    center_ticks_required:   10     # consecutive ticks required to declare HOLD
+    hold_ticks:              50     # ~5 s at 10 Hz
+    # Advance-and-sweep search (no hardcoded world coordinates — see
+    # green_navigator_node.py _run_lateral_search): same lateral strafe
+    # gate_navigator_v2_node's SEARCH state uses for the gate, but if a
+    # full pass finds nothing, also creeps forward and sweeps again — the
+    # mat/bin can be well beyond camera range from where each search begins.
+    search_strafe_speed:       0.15   # m/s
+    green_search_sweep_dist:   6.0    # m, +/- each side
+    yaw_reset_threshold_rad:   0.05   # rad — RESET_YAW convergence
+    search_advance_step_m:      3.0   # m per forward creep
+    green_search_max_advance_m: 15.0  # total forward budget before giving up
+    bin_search_max_advance_m:    8.0
+    # Blue bin YOLO is reliable on its own (confidence ~0.7-0.9, confirmed
+    # from live logs) — if the green search exhausts its advance budget,
+    # skip straight to the bin search instead of stalling on the mat.
+    skip_to_bin_if_green_not_found: true
+    # Detection freshness gate
+    green_freshness_sec:     2.0
+    # Proximity stop: switch to blue bin search within this dist of the mat (m)
+    green_approach_stop_dist: 2.0
+    # Blue bin verification: rise so bottom camera sees green background around bin
+    rise_speed:              0.10   # m/s upward during RISE_FOR_VERIFICATION
+    rise_ticks_required:     50     # ticks (~5 s = 0.5 m rise) for wider bottom-cam view
+    # Blue bin search: scoped tighter than the green search since it starts
+    # already over the green zone
+    bin_search_sweep_dist:    3.0    # m, +/- each side
+    # Survey altitude: climb here (RISE_FOR_SURVEY) before starting the bin
+    # search, so the bottom camera can see across the whole green mat.
+    # At -3.0 m the camera is ~1.2 m above the bin tops (-4.45 m); that gives
+    # a ~1.7 m wide footprint — enough to see each 0.6 m drum clearly for
+    # YOLO, and close enough that the altitude-based x/y estimate is accurate.
+    # (Previous value -2.0 put the camera 2.2 m above, making the bins tiny
+    # and systematically shifting localised positions.)
+    # Pool floor is -5.0, water surface is 0.0 — -3.0 m stays well clear.
+    bin_survey_z:            -3.0    # m, odom frame
+    survey_z_tolerance:       0.15   # m
+
+
+# ── Blue Bin pipeline ───────────────────────────────────────────────────
+
+blue_bin_detector_node:
+  ros__parameters:
+    confidence_threshold:    0.70    # Min YOLO inference confidence to publish (front cam only)
+    debug_image_dir:         ''      # '' = auto (~/.ros/yolo_debug); or set abs path
+
+# HSV-based blue-in-green CV detector (bottom camera only).
+# Replaces the YOLO bottom-camera path with a zero-false-positive colour filter:
+# only publishes a detection when a blue blob spatially overlaps the green mat
+# region in the same frame — open blue water cannot trigger it.
+blue_bin_cv_detector_node:
+  ros__parameters:
+    # Green mat HSV range — must match green_detector_node to agree on "green mat"
+    # Sim mat: ambient 0.2 0.8 0.2 -> OpenCV HSV approx (60, 191, 204)
+    green_h_low:   38
+    green_h_high:  82
+    green_s_low:   80
+    green_v_low:   60
+    # Blue drum HSV range
+    # Sim drum: ambient 0 0 1 -> OpenCV HSV (120, 255, 255)
+    # Wide margins for underwater lighting attenuation and fog.
+    blue_h_low:   100
+    blue_h_high:  130
+    blue_s_low:   100    # slightly lower than pure-blue to catch lit faces
+    blue_v_low:    140    # bright drum V~255; background water V~115 — threshold at 140 separates cleanly
+    # Quality gates
+    min_blue_area_px:   80.0   # px2 — ignore noise specks
+    min_overlap_frac:    0.15  # 15% of blue blob must sit on dilated green mask
+    green_dilate_px:     20    # px — 20px dilation catches drums at mat edge without reaching open water
+    morph_kernel_px:      5    # morphological cleanup kernel size
+    # Processing rate (reduces CPU load — camera runs at 15 Hz)
+    process_rate_hz:     10.0
+    debug_image_dir:     ''    # '' = auto (~/.ros/blue_bin_cv_detections)
+
+
+blue_bin_localizer_node:
+  ros__parameters:
+    confidence_threshold:    0.70    # Min confidence to compute 3D position
+    stereo_baseline:         0.075   # m — matches gate_localizer (model.sdf)
+    patch_radius:            4
+    min_valid_pixels:        3
+    min_depth_m:             0.2
+    max_depth_m:             15.0
+    # Height of the TARGET SURFACE in world/odom frame (used by the bottom
+    # camera path to compute altitude = |cam_z - pool_floor_z|).
+    # In camera_test.sdf: drum centre z=-4.75, radius=0.3 → top at z=-4.45.
+    # Set to -4.5 (bin top) NOT -5.0 (pool floor) so altitude reflects the
+    # actual camera-to-bin distance and x/y offsets are geometrically correct.
+    pool_floor_z:            -4.5    # m — top of the blue bin drums
+    bottom_cam_z_offset:     -0.28   # m — camera below base_link (matches model.sdf)

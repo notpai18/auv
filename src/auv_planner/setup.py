@@ -22,7 +22,12 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'gate_navigator_node = auv_planner.gate_navigator_node:main'
+            # Gate mission
+            'gate_navigator_node    = auv_planner.gate_navigator_node:main',
+            'gate_navigator_v2_node = auv_planner.gate_navigator_v2_node:main',
+
+            # Green zone mission
+            'green_navigator_node   = auv_planner.green_navigator_node:main',
         ],
     },
 )

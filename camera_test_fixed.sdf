@@ -1,0 +1,262 @@
+<?xml version="1.0" ?>
+<!--
+  AUV Competition Pool World
+  ============================================================
+  Internal pool dimensions: 25 m (length, X) x 28 m (width, Y) x 5 m (depth, Z)
+
+  Coordinate convention (world frame):
+    Origin (0, 0, 0)  = top-left corner of pool AT THE WATER SURFACE
+    (25, 0,  0)       = top-right corner (water surface)
+    (0, -28, 0)       = bottom-left corner (water surface)
+    (25, -28, 0)      = bottom-right corner (water surface)
+    (0, 0,  -5)       = top-left corner at POOL FLOOR
+    (25, -28, -5)     = bottom-right corner at pool floor
+
+  Pool centre (geometry):  X=12.5, Y=-14, Z=-2.5
+  Water surface plane:     Z = 0
+  Pool floor plane:        Z = -5
+
+  Physics: zero gravity => neutral buoyancy (basic weightless underwater env)
+-->
+<sdf version="1.9">
+  <world name="auv_pool_world">
+
+    <!-- ============================================================
+         PHYSICS - zero gravity for neutral buoyancy
+    ============================================================ -->
+    <gravity>0 0 0</gravity>
+
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <!-- ============================================================
+         REQUIRED PLUGINS
+    ============================================================ -->
+    <plugin filename="gz-sim-physics-system"
+            name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-scene-broadcaster-system"
+            name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-user-commands-system"
+            name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-sensors-system"
+            name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+
+    <!-- ============================================================
+         SCENE - underwater ambient colours
+    ============================================================ -->
+    <scene>
+      <ambient>0.35 0.55 0.75 1</ambient>
+      <background>0.05 0.28 0.45 1</background>
+      <shadows>true</shadows>
+      <!-- subtle linear fog to mimic water visibility falloff -->
+      <fog>
+        <type>linear</type>
+        <color>0.05 0.28 0.50 1.0</color>
+        <start>4.0</start>
+        <end>25.0</end>
+      </fog>
+    </scene>
+
+    <!-- ============================================================
+         LIGHTING - directional sun entering from above/ahead
+    ============================================================ -->
+    <light type="directional" name="sun">
+      <!-- Positioned high above pool centre, angled slightly forward -->
+      <pose>12.5 -14 20 0 0.4 0</pose>
+      <diffuse>0.9 0.95 1.0 1</diffuse>
+      <specular>0.3 0.35 0.4 1</specular>
+      <direction>-0.2 0.1 -1</direction>
+      <cast_shadows>true</cast_shadows>
+    </light>
+
+    <!-- Ambient fill light so the pool floor is not pitch black -->
+    <light type="point" name="fill_light">
+      <pose>12.5 -14 -1 0 0 0</pose>
+      <diffuse>0.3 0.5 0.7 1</diffuse>
+      <specular>0.1 0.15 0.2 1</specular>
+      <attenuation>
+        <range>40</range>
+        <constant>0.5</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+    </light>
+
+    <!-- ============================================================
+         POOL FLOOR
+         Geometry: 25 m x 28 m box, 0.2 m thick
+         Top face sits exactly at Z = -5 (pool bottom)
+         Centre: (12.5, -14, -5.1)
+    ============================================================ -->
+    <model name="pool_floor">
+      <static>true</static>
+      <pose>12.5 -14 -5.1 0 0 0</pose>
+      <link name="link">
+        <collision name="floor_collision">
+          <geometry>
+            <box><size>25 28 0.2</size></box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode><mu>0.8</mu><mu2>0.8</mu2></ode>
+            </friction>
+          </surface>
+        </collision>
+        <visual name="floor_visual">
+          <geometry>
+            <box><size>25 28 0.2</size></box>
+          </geometry>
+          <material>
+            <!-- Dark tiled pool floor -->
+            <ambient>0.12 0.18 0.28 1</ambient>
+            <diffuse>0.15 0.22 0.32 1</diffuse>
+            <specular>0.05 0.08 0.12 0.5</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================================
+         POOL WALL - NORTH  (Y = 0 side, top edge)
+         Spans X: 0 to 25, at Y = 0 facing inward (+Y)
+         Dimensions: 25 m wide x 5 m tall x 0.2 m thick
+         Centre: (12.5, 0.1, -2.5)
+    ============================================================ -->
+    <model name="pool_wall_north">
+      <static>true</static>
+      <pose>12.5 0.1 -2.5 0 0 0</pose>
+      <link name="link">
+        <collision name="wall_collision">
+          <geometry>
+            <box><size>25 0.2 5</size></box>
+          </geometry>
+        </collision>
+        <visual name="wall_visual">
+          <geometry>
+            <box><size>25 0.2 5</size></box>
+          </geometry>
+          <material>
+            <ambient>0.18 0.25 0.40 1</ambient>
+            <diffuse>0.20 0.32 0.46 1</diffuse>
+            <specular>0.05 0.08 0.12 0.5</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================================
+         POOL WALL - SOUTH  (Y = -28 side, bottom edge)
+         Centre: (12.5, -25.1, -2.5)
+    ============================================================ -->
+    <model name="pool_wall_south">
+      <static>true</static>
+      <pose>12.5 -25.1 -2.5 0 0 0</pose>
+      <link name="link">
+        <collision name="wall_collision">
+          <geometry>
+            <box><size>25 0.2 5</size></box>
+          </geometry>
+        </collision>
+        <visual name="wall_visual">
+          <geometry>
+            <box><size>25 0.2 5</size></box>
+          </geometry>
+          <material>
+            <ambient>0.18 0.25 0.40 1</ambient>
+            <diffuse>0.20 0.32 0.46 1</diffuse>
+            <specular>0.05 0.08 0.12 0.5</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================================
+         POOL WALL - WEST  (X = 0 side, left edge)
+         Spans Y: 0 to -28, at X = 0 facing inward (+X)
+         Dimensions: 28 m wide x 5 m tall x 0.2 m thick
+         Centre: (-0.1, -14, -2.5)
+    ============================================================ -->
+    <model name="pool_wall_west">
+      <static>true</static>
+      <pose>-0.1 -14 -2.5 0 0 0</pose>
+      <link name="link">
+        <collision name="wall_collision">
+          <geometry>
+            <box><size>0.2 28 5</size></box>
+          </geometry>
+        </collision>
+        <visual name="wall_visual">
+          <geometry>
+            <box><size>0.2 28 5</size></box>
+          </geometry>
+          <material>
+            <ambient>0.18 0.25 0.40 1</ambient>
+            <diffuse>0.20 0.32 0.46 1</diffuse>
+            <specular>0.05 0.08 0.12 0.5</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================================
+         POOL WALL - EAST  (X = 25 side, right edge)
+         Centre: (28.1, -14, -2.5)
+    ============================================================ -->
+    <model name="pool_wall_east">
+      <static>true</static>
+      <pose>28.1 -14 -2.5 0 0 0</pose>
+      <link name="link">
+        <collision name="wall_collision">
+          <geometry>
+            <box><size>0.2 28 5</size></box>
+          </geometry>
+        </collision>
+        <visual name="wall_visual">
+          <geometry>
+            <box><size>0.2 28 5</size></box>
+          </geometry>
+          <material>
+            <ambient>0.18 0.25 0.40 1</ambient>
+            <diffuse>0.20 0.32 0.46 1</diffuse>
+            <specular>0.05 0.08 0.12 0.5</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================================
+         WATER SURFACE
+         Semi-transparent blue plane at exactly Z = 0
+         (the top of the 5 m water column / the pool rim)
+         No collision - robots can pass through the surface freely.
+         Centre of pool surface: (12.5, -14, 0)
+    ============================================================ -->
+    <model name="water_surface">
+      <static>true</static>
+      <pose>12.5 -14 0 0 0 0</pose>
+      <link name="link">
+        <visual name="water_visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>25 28</size>
+            </plane>
+          </geometry>
+          <material>
+            <!-- Semi-transparent blue water surface -->
+            <ambient>0.05 0.35 0.70 0.55</ambient>
+            <diffuse>0.10 0.45 0.80 0.55</diffuse>
+            <specular>0.60 0.80 1.00 0.80</specular>
+            <emissive>0.00 0.05 0.15 0.0</emissive>
+          </material>
+          <transparency>0.45</transparency>
+        </visual>
+      </link>
+    </model>
+
+  </world>
+</sdf>

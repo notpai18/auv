@@ -1,63 +1,356 @@
 <?xml version="1.0" ?>
+<!--
+  AUV Competition Pool World (Updated to match image_652e51.png)
+  ============================================================
+  Pool dimensions: 28 m (width, X) x 25 m (length, Y) x 5 m (depth, Z)
+
+  Coordinate convention (world frame matching the 2D schematic):
+    Origin (0, 0, 0)  = Bottom-Left corner of the schematic AT THE WATER SURFACE
+    X-axis (0 to 28)  = Runs left to right (along the 28m bottom edge)
+    Y-axis (0 to 25)  = Runs bottom to top 
+    Z-axis (0 to -5)  = Runs surface to pool floor
+
+  Physics: zero gravity => neutral buoyancy
+-->
 <sdf version="1.9">
-  <world name="camera_world">
+  <world name="auv_pool_world">
 
-    <scene>
-      <ambient>0.3 0.4 0.5 1</ambient>
-      <background>0.0 0.25 0.45 1</background>
-      <shadows>true</shadows>
-    </scene>
+    <!-- ============================================================
+         PHYSICS & PLUGINS
+    ============================================================ -->
+    <gravity>0 0 0</gravity>
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
 
-    
     <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
     <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
     <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
-
     <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
       <render_engine>ogre2</render_engine>
     </plugin>
 
+    <!-- ============================================================
+         SCENE & LIGHTING
+    ============================================================ -->
+    <scene>
+      <ambient>0.35 0.55 0.75 1</ambient>
+      <background>0.05 0.25 0.45 1</background>
+      <shadows>true</shadows>
+      <fog>
+        <type>linear</type>
+        <color>0.05 0.25 0.50 1.0</color>
+        <start>4.0</start>
+        <end>28.0</end>
+      </fog>
+    </scene>
+
     <light type="directional" name="sun">
-      <pose>0 0 10 0 0 0</pose>
-      <diffuse>1 1 1 1</diffuse>
+      <pose>14 12.5 20 0 0.4 0</pose>
+      <diffuse>0.9 0.95 1.0 1</diffuse>
+      <specular>0.3 0.35 0.4 1</specular>
+      <direction>-0.2 0.1 -1</direction>
+      <cast_shadows>true</cast_shadows>
     </light>
 
-    <model name="ground_plane">
+    <light type="point" name="fill_light">
+      <pose>14 12.5 -1 0 0 0</pose>
+      <diffuse>0.3 0.5 0.7 1</diffuse>
+      <specular>0.1 0.15 0.2 1</specular>
+      <attenuation>
+        <range>40</range>
+        <constant>0.5</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+    </light>
+
+    <!-- ============================================================
+         POOL ARCHITECTURE (28m X, 25m Y)
+    ============================================================ -->
+    <model name="pool_floor">
       <static>true</static>
+      <pose>14 12.5 -5.1 0 0 0</pose>
       <link name="link">
-        <collision name="collision">
-          <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
+        <collision name="floor_collision">
+          <geometry><box><size>28 25 0.2</size></box></geometry>
         </collision>
-        <visual name="visual">
-          <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
-          <material><ambient>0.05 0.2 0.25 1</ambient><diffuse>0.05 0.2 0.25 1</diffuse></material>
+        <visual name="floor_visual">
+          <geometry><box><size>28 25 0.2</size></box></geometry>
+          <material>
+            <ambient>0.12 0.18 0.25 1</ambient>
+            <diffuse>0.15 0.22 0.32 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- North Wall (Top of map) — 5.6 m tall: -5..+0.6, 0.6 m dry rim above waterline -->
+    <model name="pool_wall_north">
+      <static>true</static>
+      <pose>14 25.1 -2.2 0 0 0</pose>
+      <link name="link">
+        <collision name="wall_collision"><geometry><box><size>28 0.2 5.6</size></box></geometry></collision>
+        <visual name="wall_visual"><geometry><box><size>28 0.2 5.6</size></box></geometry>
+          <material><ambient>0.18 0.28 0.40 1</ambient><diffuse>0.20 0.32 0.46 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- South Wall (Bottom of map) — 5.6 m tall: -5..+0.6 -->
+    <model name="pool_wall_south">
+      <static>true</static>
+      <pose>14 -0.1 -2.2 0 0 0</pose>
+      <link name="link">
+        <collision name="wall_collision"><geometry><box><size>28 0.2 5.6</size></box></geometry></collision>
+        <visual name="wall_visual"><geometry><box><size>28 0.2 5.6</size></box></geometry>
+          <material><ambient>0.18 0.28 0.40 1</ambient><diffuse>0.20 0.32 0.46 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- East Wall (Right of map) — 5.6 m tall: -5..+0.6 -->
+    <model name="pool_wall_east">
+      <static>true</static>
+      <pose>28.1 12.5 -2.2 0 0 0</pose>
+      <link name="link">
+        <collision name="wall_collision"><geometry><box><size>0.2 25 5.6</size></box></geometry></collision>
+        <visual name="wall_visual"><geometry><box><size>0.2 25 5.6</size></box></geometry>
+          <material><ambient>0.18 0.28 0.40 1</ambient><diffuse>0.20 0.32 0.46 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- West Wall (Left of map) — 5.6 m tall: -5..+0.6 -->
+    <model name="pool_wall_west">
+      <static>true</static>
+      <pose>-0.1 12.5 -2.2 0 0 0</pose>
+      <link name="link">
+        <collision name="wall_collision"><geometry><box><size>0.2 25 5.6</size></box></geometry></collision>
+        <visual name="wall_visual"><geometry><box><size>0.2 25 5.6</size></box></geometry>
+          <material><ambient>0.18 0.28 0.40 1</ambient><diffuse>0.20 0.32 0.46 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="water_surface">
+      <static>true</static>
+      <pose>14 12.5 0 0 0 0</pose>
+      <link name="link">
+        <visual name="water_surface_visual">
+          <geometry><plane><normal>0 0 1</normal><size>28 25</size></plane></geometry>
+          <material>
+            <ambient>0.05 0.35 0.70 1.0</ambient>
+            <diffuse>0.10 0.45 0.80 1.0</diffuse>
+          </material>
+          <transparency>0.35</transparency>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Water body: fills the pool from the surface (z=0) down to the floor (z=-5).
+         Inset 2 cm from every wall/floor face to avoid z-fighting.
+         double_sided ensures it is visible from inside (GUI camera below waterline).
+         cast_shadows off — a 28×25 m shadow caster would black out the floor.
+         transparency 0.45 keeps the props and floor visible through the water.
+         Note: visibility_flags is NOT used here — it is unreliable in ogre2 and
+         can make the visual completely invisible to all cameras. -->
+    <model name="water_volume">
+      <static>true</static>
+      <pose>14 12.5 -2.5 0 0 0</pose>
+      <link name="link">
+        <visual name="water_body_visual">
+          <geometry><box><size>27.96 24.96 4.96</size></box></geometry>
+          <material>
+            <ambient>0.00 0.42 0.58 1.0</ambient>
+            <diffuse>0.00 0.62 0.82 1.0</diffuse>
+            <specular>0.05 0.10 0.15 1</specular>
+            <double_sided>true</double_sided>
+            <render_order>5</render_order>
+          </material>
+          <transparency>0.45</transparency>
+          <cast_shadows>false</cast_shadows>
         </visual>
       </link>
     </model>
 
 
-    <model name="qual_gate">
+    <!-- ============================================================
+         COMPETITION PROPS (Based on image_652e51.png)
+    ============================================================ -->
+
+    <!-- Starting Zone (140cm square, 4m from bottom) -->
+    <model name="starting_zone">
       <static>true</static>
-      <pose>4 0 0 0 0 0</pose>
-      <link name="left_pole">
-        <pose>0 1.5 1 0 0 0</pose>
+      <pose>14 4 -4.99 0 0 0</pose> <!-- Placed slightly above floor to prevent z-fighting -->
+      <link name="link">
         <visual name="visual">
-          <geometry><cylinder><radius>0.05</radius><length>2</length></cylinder></geometry>
+          <geometry><box><size>1.4 1.4 0.02</size></box></geometry>
+          <material><ambient>0.8 0.8 0.8 1</ambient><diffuse>0.8 0.8 0.8 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Gate (Shifted right by 5m, located exactly on the 12m Y line) -->
+    <model name="gate">
+      <static>true</static>
+      
+      <!-- Left Post (Black) -->
+      <link name="left_post">
+        <pose>17.5 12 -4.238 0 0 0</pose>
+        <collision name="collision"><geometry><cylinder><radius>0.05</radius><length>1.524</length></cylinder></geometry></collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.05</radius><length>1.524</length></cylinder></geometry>
+          <material><ambient>0 0 0 1</ambient><diffuse>0 0 0 1</diffuse></material>
+        </visual>
+      </link>
+
+      <!-- Right Post (Black) -->
+      <link name="right_post">
+        <pose>20.5 12 -4.238 0 0 0</pose>
+        <collision name="collision"><geometry><cylinder><radius>0.05</radius><length>1.524</length></cylinder></geometry></collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.05</radius><length>1.524</length></cylinder></geometry>
+          <material><ambient>0 0 0 1</ambient><diffuse>0 0 0 1</diffuse></material>
+        </visual>
+      </link>
+
+      <!-- Cross Bar (Black) -->
+      <link name="cross_bar">
+        <pose>19 12 -3.476 0 1.57079632679 0</pose>
+        <collision name="collision"><geometry><cylinder><radius>0.05</radius><length>3.1</length></cylinder></geometry></collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.05</radius><length>3.1</length></cylinder></geometry>
+          <material><ambient>0 0 0 1</ambient><diffuse>0 0 0 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Orange Flare (Located in the 8m-12m zone) -->
+    <model name="flare_orange">
+      <static>true</static>
+      <pose>8 10 -2.5 0 0 0</pose> <!-- Mid-depth hover -->
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.1</radius><length>0.6</length></cylinder></geometry>
           <material><ambient>1 0.5 0 1</ambient><diffuse>1 0.5 0 1</diffuse></material>
         </visual>
       </link>
-      <link name="right_pole">
-        <pose>0 -1.5 1 0 0 0</pose>
+    </model>
+
+    <!-- Blue Flare (Main Arena) -->
+    <model name="flare_blue">
+      <static>true</static>
+      <pose>18 15 -2.5 0 0 0</pose>
+      <link name="link">
         <visual name="visual">
-          <geometry><cylinder><radius>0.05</radius><length>2</length></cylinder></geometry>
-          <material><ambient>1 0.5 0 1</ambient><diffuse>1 0.5 0 1</diffuse></material>
+          <geometry><cylinder><radius>0.1</radius><length>0.6</length></cylinder></geometry>
+          <material><ambient>0 0 1 1</ambient><diffuse>0 0 1 1</diffuse></material>
         </visual>
       </link>
-      <link name="crossbar">
-        <pose>0 0 2 1.5708 0 0</pose>
+    </model>
+
+    <!-- Red Flare (Main Arena) -->
+    <model name="flare_red">
+      <static>true</static>
+      <pose>19 17 -2.5 0 0 0</pose>
+      <link name="link">
         <visual name="visual">
-          <geometry><cylinder><radius>0.05</radius><length>3</length></cylinder></geometry>
-          <material><ambient>1 0.5 0 1</ambient><diffuse>1 0.5 0 1</diffuse></material>
+          <geometry><cylinder><radius>0.1</radius><length>0.6</length></cylinder></geometry>
+          <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Yellow Flare (Main Arena) -->
+    <model name="flare_yellow">
+      <static>true</static>
+      <pose>21 19 -2.5 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.1</radius><length>0.6</length></cylinder></geometry>
+          <material><ambient>1 1 0 1</ambient><diffuse>1 1 0 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Target Zone (8m x 2m Green Mat at the far end) -->
+    <model name="target_zone">
+      <static>true</static>
+      <pose>10 22 -4.99 0 0 0</pose> <!-- X=10 to offset it leftish as in diagram -->
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>8 2 0.02</size></box></geometry>
+          <material><ambient>0.2 0.8 0.2 1</ambient><diffuse>0.2 0.8 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Target Zone Drums (1 Blue, 3 Red) -->
+    <model name="drum_blue">
+      <static>true</static>
+      <pose>7 22 -4.75 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.3</radius><length>0.5</length></cylinder></geometry>
+          <material><ambient>0 0 1 1</ambient><diffuse>0 0 1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="drum_red_1">
+      <static>true</static>
+      <pose>9 22 -4.75 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.3</radius><length>0.5</length></cylinder></geometry>
+          <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="drum_red_2">
+      <static>true</static>
+      <pose>11 22 -4.75 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.3</radius><length>0.5</length></cylinder></geometry>
+          <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="drum_red_3">
+      <static>true</static>
+      <pose>13 22 -4.75 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><cylinder><radius>0.3</radius><length>0.5</length></cylinder></geometry>
+          <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- QR-Coded Objects (Approximated as boxes on the right side) -->
+    <model name="qr_box_1">
+      <static>true</static>
+      <pose>23 10 -4.75 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>0.5 0.5 0.5</size></box></geometry>
+          <material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="qr_box_2">
+      <static>true</static>
+      <pose>25 8 -4.75 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>0.5 0.5 0.5</size></box></geometry>
+          <material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse></material>
         </visual>
       </link>
     </model>

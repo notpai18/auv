@@ -1,0 +1,50 @@
+# ============================================================
+# real_params.yaml  —  Real hardware parameter overrides
+# ============================================================
+# Loaded by mission.launch.py (hardware launch, to be built).
+# Update all values below with physically measured quantities
+# before first hardware deployment.
+# ============================================================
+
+gate_navigator_v2_node:
+  ros__parameters:
+    confidence_threshold:    0.10
+    commit_distance:         5.5
+    commit_ticks_required:   5
+    align_threshold:         0.05
+    align_ticks_required:    8
+    cross_overshoot:         2.5
+    gate_odom_freeze_dist:   6.0
+    max_gate_odom_jump:      1.0
+    # TODO: measure from real robot (CAD or ruler)
+    cam_offset_fwd:          0.30    # m — UPDATE WITH REAL MEASUREMENT
+    cam_offset_left:         0.06    # m — UPDATE WITH REAL MEASUREMENT
+    stop_pause_ticks:        20
+    yolo_freshness_sec:      1.5
+    search_spin_speed:       0.10    # slower on real hardware (less drag compensation)
+    track_speed:             0.10    # m/s — conservative for first real run
+    cross_speed:             0.15    # m/s — conservative for first real run
+    track_p_gain:            1.5
+    align_p_gain:            4.0
+    angular_clamp:           0.30
+
+gate_detector_node:
+  ros__parameters:
+    confidence_threshold:    0.10
+    debug_image_dir:         ''
+
+gate_localizer_node:
+  ros__parameters:
+    confidence_threshold:    0.10
+    stereo_baseline:         0.12    # m — UPDATE WITH REAL MEASURED BASELINE
+
+mission_logger_node:
+  ros__parameters:
+    log_dir:  '~/auv_ws/mission_logs'
+
+trail_mapper_node:
+  ros__parameters:
+    min_dist_m:   0.10
+    publish_hz:   1.0
+    odom_frame:   'odom'   # real hardware uses 'odom' from robot_localization EKF
+    log_dir:      '~/auv_ws/mission_logs'

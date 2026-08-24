@@ -8,7 +8,8 @@ def generate_launch_description():
         executable='image_bridge',
         arguments=[
             '/model/auv_box/stereo_front/left/image_raw',
-            '/model/auv_box/stereo_front/right/image_raw'
+            '/model/auv_box/stereo_front/right/image_raw',
+            '/model/auv_box/bottom/image_raw'
         ],
         output='screen'
     )
@@ -22,7 +23,8 @@ def generate_launch_description():
             '/model/auv_box/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
             '/model/auv_box/odometry@nav_msgs/msg/Odometry[gz.msgs.Odometry',
             '/model/auv_box/stereo_front/left/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
-            '/model/auv_box/stereo_front/right/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo'
+            '/model/auv_box/stereo_front/right/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+            '/model/auv_box/bottom/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo'
         ],
         output='screen'
     )

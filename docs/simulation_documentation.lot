@@ -1,0 +1,37 @@
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {1.1}{\ignorespaces High-level software technology stack}}{3}{table.caption.6}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {2.1}{\ignorespaces Key world elements in \texttt {camera\_test.sdf}}}{5}{table.caption.7}%
+\contentsline {table}{\numberline {2.2}{\ignorespaces AUV model physical properties (from model.sdf)}}{6}{table.caption.8}%
+\contentsline {table}{\numberline {2.3}{\ignorespaces Hydrodynamic drag coefficients (BlueROV2 basis)}}{6}{table.caption.9}%
+\contentsline {table}{\numberline {2.4}{\ignorespaces Camera sensor specifications}}{7}{table.caption.11}%
+\contentsline {table}{\numberline {2.5}{\ignorespaces Bridge topic configuration (\texttt {bridge.launch.py})}}{8}{table.caption.12}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {4.1}{\ignorespaces Gate detector I/O specification}}{13}{table.caption.14}%
+\contentsline {table}{\numberline {4.2}{\ignorespaces Green mat dual-camera detection strategy}}{14}{table.caption.15}%
+\contentsline {table}{\numberline {4.3}{\ignorespaces Blue bin CV detector HSV thresholds}}{16}{table.caption.16}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {5.1}{\ignorespaces Gate FSM state descriptions}}{18}{table.caption.18}%
+\contentsline {table}{\numberline {5.2}{\ignorespaces Gate navigator key parameters (from \texttt {sim\_params.yaml})}}{20}{table.caption.19}%
+\contentsline {table}{\numberline {5.3}{\ignorespaces Green navigator key parameters}}{21}{table.caption.21}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {6.1}{\ignorespaces Odometry topic properties}}{23}{table.caption.22}%
+\contentsline {table}{\numberline {6.2}{\ignorespaces Trail mapper node parameters}}{24}{table.caption.23}%
+\contentsline {table}{\numberline {6.3}{\ignorespaces Localisation: simulation vs.\ real hardware}}{25}{table.caption.25}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {7.1}{\ignorespaces Mission log CSV schema (32 columns)}}{26}{table.caption.26}%
+\contentsline {table}{\numberline {7.2}{\ignorespaces Debug image outputs from vision nodes}}{27}{table.caption.27}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {8.1}{\ignorespaces Sim-to-real compliance for all active nodes}}{29}{table.caption.28}%
+\contentsline {table}{\numberline {8.2}{\ignorespaces What changes transitioning to real hardware}}{30}{table.caption.29}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {9.1}{\ignorespaces Manual terminal-by-terminal launch procedure}}{32}{table.caption.30}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {10.1}{\ignorespaces Identified limitations and planned resolutions}}{36}{table.caption.31}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {A.1}{\ignorespaces All ROS\,2 topics in the simulation pipeline}}{39}{table.A.1}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }

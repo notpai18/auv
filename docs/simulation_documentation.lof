@@ -1,0 +1,21 @@
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {1.1}{\ignorespaces Mission overview: AUV trajectory through gate (forward + return), green zone, and blue bin.}}{2}{figure.caption.5}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {2.1}{\ignorespaces AUV sensor layout: stereo camera pair and downward-facing bottom camera.}}{7}{figure.caption.10}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {3.1}{\ignorespaces Complete ROS\,2 topic graph showing all nodes and data flows.}}{10}{figure.caption.13}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {5.1}{\ignorespaces Gate Navigator v2 FSM (single-pass: FORWARD $\to $ \ldots $\to $ DONE).}}{17}{figure.caption.17}%
+\contentsline {figure}{\numberline {5.2}{\ignorespaces Green zone navigator FSM: from IDLE through SEARCH, APPROACH, CENTER, to FINAL\_DONE.}}{21}{figure.caption.20}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {6.1}{\ignorespaces Gate coordinate management in the odom frame. Blue dots show successive YOLO estimates. Red circle shows the freeze zone (gate\_odom not updated below 6\,m).}}{24}{figure.caption.24}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }

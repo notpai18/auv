@@ -1,0 +1,254 @@
+[
+  {
+    "label": "zn2.0_over_bin",
+    "ok": true,
+    "auv_xyz": [
+      7.0,
+      22.0,
+      -2.0
+    ],
+    "cam_above_bin_m": 2.17,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn2.0_over_bin.png"
+  },
+  {
+    "label": "zn2.0_1m_right",
+    "ok": true,
+    "auv_xyz": [
+      8.0,
+      22.0,
+      -2.0
+    ],
+    "cam_above_bin_m": 2.17,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn2.0_1m_right.png"
+  },
+  {
+    "label": "zn2.0_1m_left",
+    "ok": true,
+    "auv_xyz": [
+      6.0,
+      22.0,
+      -2.0
+    ],
+    "cam_above_bin_m": 2.17,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn2.0_1m_left.png"
+  },
+  {
+    "label": "zn2.0_1m_fwd",
+    "ok": true,
+    "auv_xyz": [
+      7.0,
+      23.0,
+      -2.0
+    ],
+    "cam_above_bin_m": 2.17,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn2.0_1m_fwd.png"
+  },
+  {
+    "label": "zn2.0_2m_right",
+    "ok": true,
+    "auv_xyz": [
+      9.0,
+      22.0,
+      -2.0
+    ],
+    "cam_above_bin_m": 2.17,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn2.0_2m_right.png"
+  },
+  {
+    "label": "zn2.0_1.5m_back",
+    "ok": true,
+    "auv_xyz": [
+      7.0,
+      20.5,
+      -2.0
+    ],
+    "cam_above_bin_m": 2.17,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn2.0_1.5m_back.png"
+  },
+  {
+    "label": "zn2.5_over_bin",
+    "ok": true,
+    "auv_xyz": [
+      7.0,
+      22.0,
+      -2.5
+    ],
+    "cam_above_bin_m": 1.67,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn2.5_over_bin.png"
+  },
+  {
+    "label": "zn2.5_1m_right",
+    "ok": true,
+    "auv_xyz": [
+      8.0,
+      22.0,
+      -2.5
+    ],
+    "cam_above_bin_m": 1.67,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn2.5_1m_right.png"
+  },
+  {
+    "label": "zn2.5_1m_left",
+    "ok": true,
+    "auv_xyz": [
+      6.0,
+      22.0,
+      -2.5
+    ],
+    "cam_above_bin_m": 1.67,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn2.5_1m_left.png"
+  },
+  {
+    "label": "zn2.5_1m_fwd",
+    "ok": true,
+    "auv_xyz": [
+      7.0,
+      23.0,
+      -2.5
+    ],
+    "cam_above_bin_m": 1.67,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn2.5_1m_fwd.png"
+  },
+  {
+    "label": "zn2.5_2m_right",
+    "ok": true,
+    "auv_xyz": [
+      9.0,
+      22.0,
+      -2.5
+    ],
+    "cam_above_bin_m": 1.67,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn2.5_2m_right.png"
+  },
+  {
+    "label": "zn2.5_1.5m_back",
+    "ok": true,
+    "auv_xyz": [
+      7.0,
+      20.5,
+      -2.5
+    ],
+    "cam_above_bin_m": 1.67,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn2.5_1.5m_back.png"
+  },
+  {
+    "label": "zn3.0_over_bin",
+    "ok": true,
+    "auv_xyz": [
+      7.0,
+      22.0,
+      -3.0
+    ],
+    "cam_above_bin_m": 1.17,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn3.0_over_bin.png"
+  },
+  {
+    "label": "zn3.0_1m_right",
+    "ok": true,
+    "auv_xyz": [
+      8.0,
+      22.0,
+      -3.0
+    ],
+    "cam_above_bin_m": 1.17,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn3.0_1m_right.png"
+  },
+  {
+    "label": "zn3.0_1m_left",
+    "ok": true,
+    "auv_xyz": [
+      6.0,
+      22.0,
+      -3.0
+    ],
+    "cam_above_bin_m": 1.17,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn3.0_1m_left.png"
+  },
+  {
+    "label": "zn3.0_1m_fwd",
+    "ok": true,
+    "auv_xyz": [
+      7.0,
+      23.0,
+      -3.0
+    ],
+    "cam_above_bin_m": 1.17,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn3.0_1m_fwd.png"
+  },
+  {
+    "label": "zn3.0_2m_right",
+    "ok": true,
+    "auv_xyz": [
+      9.0,
+      22.0,
+      -3.0
+    ],
+    "cam_above_bin_m": 1.17,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn3.0_2m_right.png"
+  },
+  {
+    "label": "zn3.0_1.5m_back",
+    "ok": false,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn3.0_1.5m_back.png"
+  },
+  {
+    "label": "zn3.5_over_bin",
+    "ok": false,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn3.5_over_bin.png"
+  },
+  {
+    "label": "zn3.5_1m_right",
+    "ok": false,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn3.5_1m_right.png"
+  },
+  {
+    "label": "zn3.5_1m_left",
+    "ok": false,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn3.5_1m_left.png"
+  },
+  {
+    "label": "zn3.5_1m_fwd",
+    "ok": false,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn3.5_1m_fwd.png"
+  },
+  {
+    "label": "zn3.5_2m_right",
+    "ok": false,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn3.5_2m_right.png"
+  },
+  {
+    "label": "zn3.5_1.5m_back",
+    "ok": false,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn3.5_1.5m_back.png"
+  },
+  {
+    "label": "zn4.0_over_bin",
+    "ok": false,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn4.0_over_bin.png"
+  },
+  {
+    "label": "zn4.0_1m_right",
+    "ok": false,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn4.0_1m_right.png"
+  },
+  {
+    "label": "zn4.0_1m_left",
+    "ok": false,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn4.0_1m_left.png"
+  },
+  {
+    "label": "zn4.0_1m_fwd",
+    "ok": false,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn4.0_1m_fwd.png"
+  },
+  {
+    "label": "zn4.0_2m_right",
+    "ok": false,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn4.0_2m_right.png"
+  },
+  {
+    "label": "zn4.0_1.5m_back",
+    "ok": false,
+    "file": "/home/pai/auv_ws/bottom_cam_test/zn4.0_1.5m_back.png"
+  }
+]

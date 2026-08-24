@@ -10,25 +10,42 @@ import cv2
 from ament_index_python.packages import get_package_share_directory
 
 class GateDetectorNode(Node):
-    # 0 = gate (whole gate detected as a single box in v2 model)
-    GATE_CLASS_IDS = {0}
+    # 3 = gate in v8 model, 0 = gate in v2 model
+    GATE_CLASS_IDS = {3}
 
     def __init__(self):
         super().__init__('gate_detector_node')
-        
+
+        # ------------------------------------------------------------------ #
+        #  Declare all tunable parameters (overridable via YAML or CLI)       #
+        # ------------------------------------------------------------------ #
+        self.declare_parameter('confidence_threshold', 0.10)
+        # debug_image_dir: '' = auto-select ~/.ros/yolo_debug; set abs path to override
+        self.declare_parameter('debug_image_dir', '')
+        # model_weights: filename of the .pt file inside the package weights/ dir
+        self.declare_parameter('model_weights', 'gate_detection_v8.pt')
+
+        self.p_confidence_threshold = self.get_parameter('confidence_threshold').value
+        raw_debug_dir               = self.get_parameter('debug_image_dir').value
+        self.debug_dir = (
+            raw_debug_dir if raw_debug_dir
+            else os.path.join(os.path.expanduser('~'), '.ros', 'yolo_debug')
+        )
+        p_model_weights = self.get_parameter('model_weights').value
+        # ------------------------------------------------------------------ #
+
         # 1. Initialize cv_bridge
         self.cv_bridge = CvBridge()
-        
+
         # 2. Locate and load the YOLOv8 model ONCE at startup
         package_share_directory = get_package_share_directory('auv_vision')
-        weights_path = os.path.join(package_share_directory, 'weights', 'gate_detector_v2.pt')
-        
+        weights_path = os.path.join(package_share_directory, 'weights', p_model_weights)
+
         self.get_logger().info(f'Loading YOLOv8 weights from: {weights_path}')
         self.model = YOLO(weights_path)
-        self.get_logger().info('YOLOv8 model loaded successfully!')
+        self.get_logger().info(f'YOLOv8 model loaded successfully! ({p_model_weights})')
 
         # Create debug output directory
-        self.debug_dir = '/home/pai/yolo_debug'
         os.makedirs(self.debug_dir, exist_ok=True)
         self.get_logger().info(f'Debug images will be saved to {self.debug_dir}')
         
@@ -56,7 +73,7 @@ class GateDetectorNode(Node):
             return
 
         # Run YOLO inference
-        results = self.model(cv_image, verbose=False, conf=0.10)
+        results = self.model(cv_image, verbose=False, conf=self.p_confidence_threshold)
         
         # Generate and save debug image
         try:
@@ -93,7 +110,7 @@ class GateDetectorNode(Node):
             conf, box = valid_detections[0]
             cx, cy, w, h = box.xywh[0].tolist()
             
-            # num_poles field is always 1.0 — v2 model sees gate as a single object
+            # num_poles field is always 1.0 — v6 model sees gate as a single object
             msg_out.data = [1.0, float(cx), float(cy), float(w), float(h), float(conf), 1.0]
             self.get_logger().info(f'Gate detected! Center: ({cx:.1f}, {cy:.1f}), Size: {w:.0f}x{h:.0f}, Conf: {conf:.2f}')
             
