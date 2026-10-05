@@ -41,7 +41,9 @@ class BlueBinDetectorNode(Node):
         self.declare_parameter('confidence_threshold', 0.10)
         self.declare_parameter('debug_image_dir', '')
         self.declare_parameter('model_weights', 'gate_detection_v7.pt')
-        self.declare_parameter('process_rate_hz', 10.0)   # match 10 Hz control loop
+        self.declare_parameter('process_rate_hz', 5.0)    # max YOLO inference rate
+        # Disable debug image writes by default — heavy disk I/O at inference rate
+        self.declare_parameter('save_debug_images', False)
 
         self.p_confidence_threshold = self.get_parameter('confidence_threshold').value
         raw_debug_dir = self.get_parameter('debug_image_dir').value
@@ -51,6 +53,7 @@ class BlueBinDetectorNode(Node):
         )
         p_model_weights = self.get_parameter('model_weights').value
         self.process_interval = 1.0 / self.get_parameter('process_rate_hz').value
+        self.p_save_debug = self.get_parameter('save_debug_images').value
 
         # ── Per-run save directory ──────────────────────────────────────────
         run_stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -92,13 +95,14 @@ class BlueBinDetectorNode(Node):
 
         results = self.model(cv_image, verbose=False, conf=self.p_confidence_threshold)
 
-        # Always save annotated "latest" frame (overwritten each time)
-        try:
-            annotated = results[0].plot()
-            cv2.imwrite(os.path.join(self.latest_dir, f'latest_{source_name}.jpg'), annotated)
-        except Exception as e:
-            self.get_logger().warn(f'Failed to save latest {source_name} image: {e}')
-            annotated = cv_image  # fallback
+        # Generate annotated frame (only render when debug saving is enabled)
+        annotated = cv_image
+        if self.p_save_debug:
+            try:
+                annotated = results[0].plot()
+                cv2.imwrite(os.path.join(self.latest_dir, f'latest_{source_name}.jpg'), annotated)
+            except Exception as e:
+                self.get_logger().warn(f'Failed to save latest {source_name} image: {e}')
 
         # Gather valid blue bin detections
         valid_detections = []
@@ -118,19 +122,20 @@ class BlueBinDetectorNode(Node):
             cx, cy, w, h = box.xywh[0].tolist()
             msg_out.data = [1.0, float(cx), float(cy), float(w), float(h), float(conf), 1.0]
 
-            # ── Save every individual detection with bounding box ──────
-            try:
-                self.detection_count[source_name] += 1
-                n     = self.detection_count[source_name]
-                fname = f'{source_name}_{n:04d}_conf{conf:.2f}.jpg'
-                fpath = os.path.join(self.run_dir, fname)
-                cv2.imwrite(fpath, annotated)
-                self.get_logger().info(
-                    f'[BLUE BIN] {source_name} detection #{n} saved -> {fname}  '
-                    f'(cx={cx:.0f}, cy={cy:.0f}, conf={conf:.2f})'
-                )
-            except Exception as e:
-                self.get_logger().warn(f'Failed to save detection image: {e}')
+            # ── Save individual detection frames only when debug mode on ──
+            if self.p_save_debug:
+                try:
+                    self.detection_count[source_name] += 1
+                    n     = self.detection_count[source_name]
+                    fname = f'{source_name}_{n:04d}_conf{conf:.2f}.jpg'
+                    fpath = os.path.join(self.run_dir, fname)
+                    cv2.imwrite(fpath, annotated)
+                    self.get_logger().info(
+                        f'[BLUE BIN] {source_name} detection #{n} saved -> {fname}  '
+                        f'(cx={cx:.0f}, cy={cy:.0f}, conf={conf:.2f})'
+                    )
+                except Exception as e:
+                    self.get_logger().warn(f'Failed to save detection image: {e}')
 
         publisher.publish(msg_out)
 

@@ -66,7 +66,8 @@ class TrailMapperNode(Node):
     # ── Tunable parameters ────────────────────────────────────────────────
     MIN_DIST_M = 0.10       # min AUV movement before a new trail point is stored
     PUBLISH_HZ = 1.0        # trail/marker publish rate
-    MAP_EXPORT_PERIOD_SEC = 30.0   # periodic map re-save, independent of shutdown
+    MAP_EXPORT_PERIOD_SEC = 120.0  # periodic map re-save (was 30s — matplotlib at
+                                   # 300 dpi blocks Python GIL for ~1-2 s each time)
 
     # Minimum confidence to accept a gate/bin detection at all.
     # Matches gate_localizer_node / gate_navigator_node's own threshold.
@@ -731,7 +732,7 @@ class TrailMapperNode(Node):
         # after the write fully completes means the final path is always
         # either a complete file or simply absent — never a corrupt one.
         tmp_path = self._map_png_path + '.tmp'
-        fig.savefig(tmp_path, format='png', dpi=300, bbox_inches='tight')
+        fig.savefig(tmp_path, format='png', dpi=100, bbox_inches='tight')  # 100 dpi: ~1 MP vs 300 dpi 9 MP
         plt.close(fig)
         os.replace(tmp_path, self._map_png_path)
 

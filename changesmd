@@ -1,0 +1,48 @@
+1. Real World Physics & Buoyancy
+World Gravity Enabled: Updated 
+
+camera_test.sdf
+ (and 
+
+camera_test_fixed.sdf
+) from zero gravity (0 0 0) to real Earth gravity: <gravity>0 0 -9.81</gravity>.
+Gazebo Buoyancy System (gz-sim-buoyancy-system): Configured graded water density ($\rho = 1025,\text{kg/m}^3$ submerged, $1,\text{kg/m}^3$ above water).
+2. Hydrostatic Equilibrium & Metacentric Stability
+Model Gravity Enabled: Switched <gravity>1</gravity> on base_link in 
+
+model.sdfx`'
+.
+Dedicated Neutral Buoyancy Volume: Added a buoyancy_link ($0.2254,\text{m}$ cube, displaced volume $= 0.01145,\text{m}^3 \times 1025,\text{kg/m}^3 = 11.7364,\text{kg}$, exactly matching the vehicle's dry mass).
+Passive Righting Torque: The Center of Buoyancy is positioned $5,\text{cm}$ directly above the Center of Mass ($Z_{CB} = +0.0627,\text{m}$ vs $Z_{COM} = +0.0128,\text{m}$), providing natural metacentric stability against pitch and roll capsizing.
+3. True Physical Propulsion via 8 Thrusters
+Removed Kinematic Velocity Control: Removed the gz-sim-velocity-control-system plugin that was overriding physics and setting velocities directly.
+Physical Thrusters (gz-sim-thruster-system): Added all 8 thruster links (Thruster_1 to Thruster_8) and revolute joints (T_1 to T_8) matching the real CAD geometry from 
+
+auv.xacro
+:
+$T_1 \dots T_4$: Vectored horizontal thrusters ($\pm 45^\circ$) for surge ($F_x$), sway ($F_y$), and yaw ($M_z$).
+$T_5 \dots T_8$: Vertical corner thrusters for heave ($F_z$), roll ($M_x$), and pitch ($M_y$).
+Active Hydrodynamics: With kinematic override removed, the gz-sim-hydrodynamics-system now exerts real Fossen quadratic fluid drag ($X_{u|u|} = -33.7$, $Y_{v|v|} = -54.2$, $Z_{w|w|} = -73.2$) on the hull.
+4. Propulsion & Closed-Loop Control Nodes
+auv_propulsion (
+
+thruster_allocator_node
+):
+Solves the optimal $6 \times 8$ Thruster Allocation Matrix (TAM) via Moore-Penrose pseudo-inverse: $\mathbf{u} = \mathbf{B}^+ \boldsymbol{\tau}$.
+Maps net body wrench $[F_x, F_y, F_z, M_x, M_y, M_z]$ into individual thruster forces clamped to $[-40,\text{N}, +40,\text{N}]$.
+auv_controls (
+
+velocity_controller_node
+):
+Closed-loop PID tracking comparing commanded cmd_vel against actual body-frame odometry velocities.
+Active depth holding + roll & pitch attitude restoration damping.
+ROS 2 $\leftrightarrow$ Gazebo Bridge: Updated 
+
+bridge.launch.py
+ to bridge /model/auv_box/joint/T_{1..8}/cmd_thrust (std_msgs/Float64 $\rightarrow$ gz.msgs.Double).
+Verification Results
+During end-to-end verification under full Gazebo simulation:
+
+Hovering: Neutral buoyancy holds the vehicle steadily at depth ($z = -4.535,\text{m}$) balancing against gravity.
+Surge Motion: On commanding linear velocity $0.35,\text{m/s}$, horizontal thrusters symmetrically generated $+1.52,\text{N}$ thrust, while vertical thrusters maintained depth ($z = -4.510,\text{m}$, only $\Delta z = 2.5,\text{cm}$) and the vehicle accelerated forward along $x$ entirely through fluid mechanics and forces.
+Yaw Motion: Differential thrust between left and right thrusters produced rotation torque for turning without drift.

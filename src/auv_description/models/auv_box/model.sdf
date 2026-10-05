@@ -3,15 +3,8 @@
   <model name="auv_box">
     
     <link name="base_link">
-      <!-- Gravity OFF — the vehicle holds whatever depth it is placed at.
-           Both worlds (camera_test.sdf and the DAVE worlds/dave_pool.sdf) set
-           world gravity to zero to match, so the AUV hovers at its spawn z with
-           no buoyancy force needed to hold it there.
-
-           If real weight-vs-buoyancy is ever wanted, see the commented-out
-           buoyancy block in worlds/dave_pool.sdf — it carries the worked
-           arithmetic and the reason a separate displacement link is required. -->
-      <gravity>0</gravity>
+      <!-- Gravity ON — real physical weight is balanced by the buoyancy_link below. -->
+      <gravity>1</gravity>
       <inertial>
         <!-- Design team CAD mass (dry). Inertia computed for equivalent uniform box -->
         <mass>11.7364</mass>
@@ -54,7 +47,11 @@
 
     <!-- Camera 1 - Front Left -->
     <link name="front_left_camera_link">
-      <pose relative_to="base_link">0.50 0.0375 0 0 0 0</pose>
+      <!-- x=0.55: the hull mesh (base_link.STL) tapers to a nose tip whose
+           surface still reaches x=0.5097, so anything at x=0.50 sits inside
+           the solid geometry — the camera rendered the inside of the hull
+           instead of open water. 0.55 clears the tip by ~4cm. -->
+      <pose relative_to="base_link">0.55 0.0375 0 0 0 0</pose>
       <inertial>
         <mass>0.0001</mass>
         <inertia>
@@ -78,26 +75,20 @@
         </material>
       </visual>
       <sensor name="front_left_camera_sensor" type="camera">
-        <update_rate>15</update_rate>
+        <update_rate>10</update_rate>
         <visualize>false</visualize>
         <always_on>true</always_on>
         <topic>/model/auv_box/stereo_front/left/image_raw</topic>
         <camera>
           <!-- WATER VISIBILITY TOGGLE (all three cameras — keep them in sync)
 
-               Uncommented, mask 0x00000001 hides the two water visuals in
-               worlds/dave_pool.sdf, which clear bit 0 (0xFFFFFFFE). The pool
-               then looks filled in the GUI while these frames stay
-               pixel-identical to the ones YOLO and the HSV thresholds were
-               tuned on.
-
-               Left commented, the cameras use the default all-bits mask and
-               DO see the water, so the feeds get the blue cast that goes with
-               the scene fog. That is the intended state: the feeds should look
-               like they are underwater.
-
-               Re-comment these three lines if detection accuracy drops and you
-               want the old clear-water frames back. -->
+               Uncommented, mask 0x00000001 would hide any world visual whose
+               own visibility_flags clear bit 0, letting the pool look filled
+               in the GUI while these frames stay pixel-identical to the ones
+               YOLO and the HSV thresholds were tuned on. camera_test.sdf does
+               not use visibility_flags on its water visuals (see its own
+               comment on water_volume for why), so this has no effect today —
+               left here in case a future world adopts that scheme. -->
           <!-- <visibility_mask>1</visibility_mask> -->
           <horizontal_fov>1.274</horizontal_fov>
           <image>
@@ -119,7 +110,9 @@
 
     <!-- Camera 2 - Front Right -->
     <link name="front_right_camera_link">
-      <pose relative_to="base_link">0.50 -0.0375 0 0 0 0</pose>
+      <!-- x=0.55 — see front_left_camera_link above; must match its X exactly
+           or stereo disparity breaks. -->
+      <pose relative_to="base_link">0.55 -0.0375 0 0 0 0</pose>
       <inertial>
         <mass>0.0001</mass>
         <inertia>
@@ -129,7 +122,7 @@
         </inertia>
       </inertial>
       <sensor name="front_right_camera_sensor" type="camera">
-        <update_rate>15</update_rate>
+        <update_rate>10</update_rate>
         <visualize>false</visualize>
         <always_on>true</always_on>
         <topic>/model/auv_box/stereo_front/right/image_raw</topic>
@@ -179,7 +172,7 @@
         </material>
       </visual>
       <sensor name="bottom_camera_sensor" type="camera">
-        <update_rate>15</update_rate>
+        <update_rate>10</update_rate>
         <visualize>false</visualize>
         <always_on>true</always_on>
         <topic>/model/auv_box/bottom/image_raw</topic>
@@ -209,14 +202,347 @@
       <child>bottom_camera_link</child>
     </joint>
 
-    <!-- Hydrodynamics Plugin (added-mass + drag, Fossen model)
-         Coefficients are DAVE's bluerov2 values.
+    <!-- ── Buoyancy Link ─────────────────────────────────────────────── -->
+    <!-- Sized for exact neutral buoyancy in salt water (rho = 1025 kg/m^3):
+         V = 11.7364 kg / 1025 kg/m^3 = 0.011450146 m^3 (0.225391 m cube).
+         Center of Buoyancy at Z=+0.0627 m is +0.05 m above Center of Mass (Z=+0.01275 m),
+         providing metacentric restoring stability against roll and pitch.
+         collide_bitmask 0 ensures fluid lift without solid obstacle collision. -->
+    <link name="buoyancy_link">
+      <pose relative_to="base_link">0.0342 0 0.0627 0 0 0</pose>
+      <inertial>
+        <mass>0.0001</mass>
+        <inertia>
+          <ixx>0.00001</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>0.00001</iyy><iyz>0</iyz>
+          <izz>0.00001</izz>
+        </inertia>
+      </inertial>
+      <collision name="buoyancy_collision">
+        <geometry>
+          <box>
+            <size>0.225391 0.225391 0.225391</size>
+          </box>
+        </geometry>
+        <surface>
+          <contact>
+            <collide_bitmask>0</collide_bitmask>
+          </contact>
+        </surface>
+      </collision>
+    </link>
 
-         HEADS UP: these coefficients currently have NO EFFECT on motion. The
-         VelocityControl plugin below sets the model's velocity directly every
-         physics step, which overwrites whatever forces hydrodynamics or ocean
-         current apply. Drag becomes real the moment VelocityControl is swapped
-         for thrusters. -->
+    <joint name="buoyancy_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>buoyancy_link</child>
+    </joint>
+
+    <!-- ── Thruster 1 (front-right horizontal, 45 deg) ────────────────── -->
+    <link name="Thruster_1">
+      <pose relative_to="base_link">0.32408 -0.29242 0.0127 -1.5708 0 -0.7854</pose>
+      <inertial>
+        <mass>0.00833</mass>
+        <inertia>
+          <ixx>2.336e-06</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>2.335e-06</iyy><iyz>0</iyz>
+          <izz>3.444e-06</izz>
+        </inertia>
+      </inertial>
+      <visual name="Thruster_1_visual">
+        <geometry>
+          <mesh><uri>package://auv_description/meshes/Thruster_1.STL</uri></mesh>
+        </geometry>
+        <material>
+          <ambient>0.792 0.820 0.933 1</ambient>
+          <diffuse>0.792 0.820 0.933 1</diffuse>
+        </material>
+      </visual>
+    </link>
+    <joint name="T_1" type="revolute">
+      <pose relative_to="Thruster_1">0 0 0 0 0 0</pose>
+      <parent>base_link</parent>
+      <child>Thruster_1</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit><lower>-1e12</lower><upper>1e12</upper><effort>-1</effort><velocity>-1</velocity></limit>
+      </axis>
+    </joint>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <namespace>auv_box</namespace>
+      <joint_name>T_1</joint_name>
+      <thrust_coefficient>0.02</thrust_coefficient>
+      <fluid_density>1025.0</fluid_density>
+      <propeller_diameter>0.1</propeller_diameter>
+    </plugin>
+
+    <!-- ── Thruster 2 (front-left horizontal, 45 deg) ─────────────────── -->
+    <link name="Thruster_2">
+      <pose relative_to="base_link">0.32408 0.29242 0.0127 -1.5708 0 -2.3562</pose>
+      <inertial>
+        <mass>0.00833</mass>
+        <inertia>
+          <ixx>2.336e-06</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>2.335e-06</iyy><iyz>0</iyz>
+          <izz>3.444e-06</izz>
+        </inertia>
+      </inertial>
+      <visual name="Thruster_2_visual">
+        <geometry>
+          <mesh><uri>package://auv_description/meshes/Thruster_2.STL</uri></mesh>
+        </geometry>
+        <material>
+          <ambient>0.792 0.820 0.933 1</ambient>
+          <diffuse>0.792 0.820 0.933 1</diffuse>
+        </material>
+      </visual>
+    </link>
+    <joint name="T_2" type="revolute">
+      <pose relative_to="Thruster_2">0 0 0 0 0 0</pose>
+      <parent>base_link</parent>
+      <child>Thruster_2</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit><lower>-1e12</lower><upper>1e12</upper><effort>-1</effort><velocity>-1</velocity></limit>
+      </axis>
+    </joint>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <namespace>auv_box</namespace>
+      <joint_name>T_2</joint_name>
+      <thrust_coefficient>0.02</thrust_coefficient>
+      <fluid_density>1025.0</fluid_density>
+      <propeller_diameter>0.1</propeller_diameter>
+    </plugin>
+
+    <!-- ── Thruster 3 (rear-left horizontal, 45 deg) ──────────────────── -->
+    <link name="Thruster_3">
+      <pose relative_to="base_link">-0.36742 -0.24908 0.0127 -1.5708 0 -2.3562</pose>
+      <inertial>
+        <mass>0.00833</mass>
+        <inertia>
+          <ixx>2.336e-06</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>2.335e-06</iyy><iyz>0</iyz>
+          <izz>3.444e-06</izz>
+        </inertia>
+      </inertial>
+      <visual name="Thruster_3_visual">
+        <geometry>
+          <mesh><uri>package://auv_description/meshes/Thruster_3.STL</uri></mesh>
+        </geometry>
+        <material>
+          <ambient>0.792 0.820 0.933 1</ambient>
+          <diffuse>0.792 0.820 0.933 1</diffuse>
+        </material>
+      </visual>
+    </link>
+    <joint name="T_3" type="revolute">
+      <pose relative_to="Thruster_3">0 0 0 0 0 0</pose>
+      <parent>base_link</parent>
+      <child>Thruster_3</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit><lower>-1e12</lower><upper>1e12</upper><effort>-1</effort><velocity>-1</velocity></limit>
+      </axis>
+    </joint>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <namespace>auv_box</namespace>
+      <joint_name>T_3</joint_name>
+      <thrust_coefficient>0.02</thrust_coefficient>
+      <fluid_density>1025.0</fluid_density>
+      <propeller_diameter>0.1</propeller_diameter>
+    </plugin>
+
+    <!-- ── Thruster 4 (rear-right horizontal, 45 deg) ─────────────────── -->
+    <link name="Thruster_4">
+      <pose relative_to="base_link">-0.36742 0.24908 0.0127 -1.5708 0 -0.7854</pose>
+      <inertial>
+        <mass>0.00833</mass>
+        <inertia>
+          <ixx>2.336e-06</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>2.335e-06</iyy><iyz>0</iyz>
+          <izz>3.444e-06</izz>
+        </inertia>
+      </inertial>
+      <visual name="Thruster_4_visual">
+        <geometry>
+          <mesh><uri>package://auv_description/meshes/Thruster_4.STL</uri></mesh>
+        </geometry>
+        <material>
+          <ambient>0.792 0.820 0.933 1</ambient>
+          <diffuse>0.792 0.820 0.933 1</diffuse>
+        </material>
+      </visual>
+    </link>
+    <joint name="T_4" type="revolute">
+      <pose relative_to="Thruster_4">0 0 0 0 0 0</pose>
+      <parent>base_link</parent>
+      <child>Thruster_4</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit><lower>-1e12</lower><upper>1e12</upper><effort>-1</effort><velocity>-1</velocity></limit>
+      </axis>
+    </joint>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <namespace>auv_box</namespace>
+      <joint_name>T_4</joint_name>
+      <thrust_coefficient>0.02</thrust_coefficient>
+      <fluid_density>1025.0</fluid_density>
+      <propeller_diameter>0.1</propeller_diameter>
+    </plugin>
+
+    <!-- ── Thruster 5 (front-right vertical) ──────────────────────────── -->
+    <link name="Thruster_5">
+      <pose relative_to="base_link">0.125 -0.3647 0.043352 3.1416 0 0</pose>
+      <inertial>
+        <mass>0.00833</mass>
+        <inertia>
+          <ixx>2.334e-06</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>2.336e-06</iyy><iyz>0</iyz>
+          <izz>3.444e-06</izz>
+        </inertia>
+      </inertial>
+      <visual name="Thruster_5_visual">
+        <geometry>
+          <mesh><uri>package://auv_description/meshes/Thruster_5.STL</uri></mesh>
+        </geometry>
+        <material>
+          <ambient>0.792 0.820 0.933 1</ambient>
+          <diffuse>0.792 0.820 0.933 1</diffuse>
+        </material>
+      </visual>
+    </link>
+    <joint name="T_5" type="revolute">
+      <pose relative_to="Thruster_5">0 0 0 0 0 0</pose>
+      <parent>base_link</parent>
+      <child>Thruster_5</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit><lower>-1e12</lower><upper>1e12</upper><effort>-1</effort><velocity>-1</velocity></limit>
+      </axis>
+    </joint>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <namespace>auv_box</namespace>
+      <joint_name>T_5</joint_name>
+      <thrust_coefficient>0.02</thrust_coefficient>
+      <fluid_density>1025.0</fluid_density>
+      <propeller_diameter>0.1</propeller_diameter>
+    </plugin>
+
+    <!-- ── Thruster 6 (front-left vertical) ───────────────────────────── -->
+    <link name="Thruster_6">
+      <pose relative_to="base_link">0.125 0.3647 -0.017952 0 0 0</pose>
+      <inertial>
+        <mass>0.00833</mass>
+        <inertia>
+          <ixx>2.334e-06</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>2.336e-06</iyy><iyz>0</iyz>
+          <izz>3.444e-06</izz>
+        </inertia>
+      </inertial>
+      <visual name="Thruster_6_visual">
+        <geometry>
+          <mesh><uri>package://auv_description/meshes/Thruster_6.STL</uri></mesh>
+        </geometry>
+        <material>
+          <ambient>0.792 0.820 0.933 1</ambient>
+          <diffuse>0.792 0.820 0.933 1</diffuse>
+        </material>
+      </visual>
+    </link>
+    <joint name="T_6" type="revolute">
+      <pose relative_to="Thruster_6">0 0 0 0 0 0</pose>
+      <parent>base_link</parent>
+      <child>Thruster_6</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit><lower>-1e12</lower><upper>1e12</upper><effort>-1</effort><velocity>-1</velocity></limit>
+      </axis>
+    </joint>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <namespace>auv_box</namespace>
+      <joint_name>T_6</joint_name>
+      <thrust_coefficient>0.02</thrust_coefficient>
+      <fluid_density>1025.0</fluid_density>
+      <propeller_diameter>0.1</propeller_diameter>
+    </plugin>
+
+    <!-- ── Thruster 7 (rear-right vertical) ───────────────────────────── -->
+    <link name="Thruster_7">
+      <pose relative_to="base_link">-0.125 -0.3647 0.013969 0 0 0</pose>
+      <inertial>
+        <mass>0.00833</mass>
+        <inertia>
+          <ixx>2.334e-06</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>2.336e-06</iyy><iyz>0</iyz>
+          <izz>3.444e-06</izz>
+        </inertia>
+      </inertial>
+      <visual name="Thruster_7_visual">
+        <geometry>
+          <mesh><uri>package://auv_description/meshes/Thruster_7.STL</uri></mesh>
+        </geometry>
+        <material>
+          <ambient>0.792 0.820 0.933 1</ambient>
+          <diffuse>0.792 0.820 0.933 1</diffuse>
+        </material>
+      </visual>
+    </link>
+    <joint name="T_7" type="revolute">
+      <pose relative_to="Thruster_7">0 0 0 0 0 0</pose>
+      <parent>base_link</parent>
+      <child>Thruster_7</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit><lower>-1e12</lower><upper>1e12</upper><effort>-1</effort><velocity>-1</velocity></limit>
+      </axis>
+    </joint>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <namespace>auv_box</namespace>
+      <joint_name>T_7</joint_name>
+      <thrust_coefficient>0.02</thrust_coefficient>
+      <fluid_density>1025.0</fluid_density>
+      <propeller_diameter>0.1</propeller_diameter>
+    </plugin>
+
+    <!-- ── Thruster 8 (rear-left vertical) ────────────────────────────── -->
+    <link name="Thruster_8">
+      <pose relative_to="base_link">-0.125 0.3647 0.043352 3.1416 0 0</pose>
+      <inertial>
+        <mass>0.00833</mass>
+        <inertia>
+          <ixx>2.334e-06</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>2.336e-06</iyy><iyz>0</iyz>
+          <izz>3.444e-06</izz>
+        </inertia>
+      </inertial>
+      <visual name="Thruster_8_visual">
+        <geometry>
+          <mesh><uri>package://auv_description/meshes/Thruster_8.STL</uri></mesh>
+        </geometry>
+        <material>
+          <ambient>0.792 0.820 0.933 1</ambient>
+          <diffuse>0.792 0.820 0.933 1</diffuse>
+        </material>
+      </visual>
+    </link>
+    <joint name="T_8" type="revolute">
+      <pose relative_to="Thruster_8">0 0 0 0 0 0</pose>
+      <parent>base_link</parent>
+      <child>Thruster_8</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit><lower>-1e12</lower><upper>1e12</upper><effort>-1</effort><velocity>-1</velocity></limit>
+      </axis>
+    </joint>
+    <plugin filename="gz-sim-thruster-system" name="gz::sim::systems::Thruster">
+      <namespace>auv_box</namespace>
+      <joint_name>T_8</joint_name>
+      <thrust_coefficient>0.02</thrust_coefficient>
+      <fluid_density>1025.0</fluid_density>
+      <propeller_diameter>0.1</propeller_diameter>
+    </plugin>
+
+    <!-- ── Hydrodynamics Plugin (Fossen model: added mass + quadratic drag) ── -->
+    <!-- Active now that kinematic VelocityControl is replaced by real thrusters -->
     <plugin filename="gz-sim-hydrodynamics-system" name="gz::sim::systems::Hydrodynamics">
       <link_name>base_link</link_name>
       <water_density>1025.0</water_density>
@@ -231,49 +557,6 @@
       <mQabsQ>-3.992</mQabsQ>
       <nRabsR>-3.992</nRabsR>
     </plugin>
-
-    <!-- Velocity Control Plugin — KINEMATIC DRIVE
-         Sets the model's velocity directly from /model/auv_box/cmd_vel rather
-         than applying thrust. The vehicle therefore tracks commanded velocity
-         perfectly and ignores every fluid force acting on it — hydrodynamic
-         drag and ocean current alike.
-
-         This is deliberate. The gate and green navigators assume exact velocity
-         tracking, so keeping this plugin is what lets the DAVE water migration
-         land without retuning a single FSM.
-
-         TO GET REAL WATER DYNAMICS ON THE VEHICLE (phase 2):
-           1. Delete this plugin.
-           2. Add one gz-sim-thruster-system per thruster. The eight meshes are
-              already in meshes/Thruster_1..8.STL but have no links in this SDF.
-           3. Implement thrust allocation in auv_propulsion (currently an empty
-              stub package: CMakeLists.txt and package.xml only, no source).
-           4. Implement a closed-loop cmd_vel PID in auv_controls (also an empty
-              stub) so the navigators' existing cmd_vel interface still works.
-           5. Uncomment the OceanCurrentModelPlugin block below.
-         Only after step 1 do the hydrodynamics coefficients above and the
-         world's ocean current start affecting motion. -->
-    <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl">
-      <topic>/model/auv_box/cmd_vel</topic>
-      <initial_linear>0 0 0</initial_linear>
-      <initial_angular>0 0 0</initial_angular>
-    </plugin>
-
-    <!-- DAVE Ocean Current — applies the world's current as a force on the hull.
-         Commented out because VelocityControl above would ignore it anyway;
-         enabling it now would only cost CPU. Uncomment as part of phase 2.
-         Requires dave_ws sourced so the plugin library is on
-         GZ_SIM_SYSTEM_PLUGIN_PATH. The namespace and topic must match the
-         OceanCurrentWorldPlugin in worlds/dave_pool.sdf. -->
-    <!--
-    <plugin filename="OceanCurrentModelPlugin"
-            name="dave_gz_model_plugins::OceanCurrentModelPlugin">
-      <namespace>auv_box</namespace>
-      <flow_velocity_topic>ocean_current</flow_velocity_topic>
-      <link_name>base_link</link_name>
-      <base_link_name>auv_box/base_link</base_link_name>
-    </plugin>
-    -->
 
     <!-- Odometry Publisher Plugin -->
     <plugin filename="gz-sim-odometry-publisher-system" name="gz::sim::systems::OdometryPublisher">

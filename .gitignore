@@ -2,3 +2,23 @@ build/
 install/
 log/
 analysis_for_ai*
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Mission runtime logs and maps
+mission_logs/
+
+# Docs LaTeX build artifacts
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc
+docs/*.lof
+docs/*.lot
+
+# Tool config / cache
+.freebuff/
+

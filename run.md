@@ -48,19 +48,28 @@ gz sim -r ~/auv_ws/camera_test.sdf
 #   Challenge: AUV must SEARCH-spin ~180°, then track from far-left-rear
 # ════════════════════════════════════════════════════════════
 source ~/auv_ws/install/setup.bash
+export GZ_SIM_RESOURCE_PATH="$(ros2 pkg prefix auv_description)/share"
 ros2 run ros_gz_sim create \
-  -world camera_world \
+  -world auv_pool_world \
   -file ~/auv_ws/install/auv_description/share/auv_description/models/auv_box/model.sdf \
   -name auv_box \
-  -x -5 -y 0 -z 1.5 \
+  -x -5 -y 0 -z -4.238 \
   -Y 0
 
 # ════════════════════════════════════════════════════════════
-# TERMINAL 3 — ROS <-> Gazebo bridge
+# TERMINAL 3 — ROS <-> Gazebo bridge & physical thrusters
 # Wait for: bridge topics to appear (no error output)
 # ════════════════════════════════════════════════════════════
 source ~/auv_ws/install/setup.bash
 ros2 launch auv_description bridge.launch.py
+
+# ════════════════════════════════════════════════════════════
+# TERMINAL 3b — Thruster Allocator & Velocity Controller
+# (Translates cmd_vel -> body wrench -> 8 physical thrusters)
+# ════════════════════════════════════════════════════════════
+# source ~/auv_ws/install/setup.bash
+# ros2 run auv_propulsion thruster_allocator_node &
+# ros2 run auv_controls velocity_controller_node &
 
 # ════════════════════════════════════════════════════════════
 # TERMINAL 4 — Stereo depth processing (disparity)

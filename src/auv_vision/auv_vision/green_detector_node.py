@@ -64,6 +64,10 @@ class GreenDetectorNode(Node):
 
         # Debug image output directory ('' → auto ~/.ros/yolo_debug)
         self.declare_parameter('debug_image_dir', '')
+        # Max processing rate per camera (camera ticks faster than needed)
+        self.declare_parameter('process_rate_hz', 5.0)
+        # Disable debug image writes by default — heavy disk I/O at process rate
+        self.declare_parameter('save_debug_images', False)
 
         # Bind parameters
         p = self.get_parameter
@@ -83,6 +87,12 @@ class GreenDetectorNode(Node):
             else os.path.join(os.path.expanduser('~'), '.ros', 'yolo_debug')
         )
         os.makedirs(self.debug_dir, exist_ok=True)
+        _min_period = 1.0 / max(p('process_rate_hz').value, 0.1)
+        self._front_min_period = _min_period
+        self._bottom_min_period = _min_period
+        self._front_last_t  = 0.0
+        self._bottom_last_t = 0.0
+        self.p_save_debug = p('save_debug_images').value
         # ------------------------------------------------------------------ #
 
         # Publishers
@@ -199,6 +209,13 @@ class GreenDetectorNode(Node):
     # ------------------------------------------------------------------ #
 
     def front_image_callback(self, msg):
+        # Rate limiter
+        import time as _time
+        now = _time.monotonic()
+        if (now - self._front_last_t) < self._front_min_period:
+            return
+        self._front_last_t = now
+
         try:
             full_image = self.cv_bridge.imgmsg_to_cv2(msg, 'bgr8')
         except Exception as e:
@@ -231,14 +248,22 @@ class GreenDetectorNode(Node):
                 f'w={w:.0f} h={h:.0f} conf={conf_approx:.4f}')
 
         self.front_pub.publish(pub_msg)
-        self._save_debug(full_image, mask, result,
-                         'latest_green_front.jpg', roi_y0=roi_y0)
+        if self.p_save_debug:
+            self._save_debug(full_image, mask, result,
+                             'latest_green_front.jpg', roi_y0=roi_y0)
 
     # ------------------------------------------------------------------ #
     #  Bottom camera callback — Phase 2                                    #
     # ------------------------------------------------------------------ #
 
     def bottom_image_callback(self, msg):
+        # Rate limiter
+        import time as _time
+        now = _time.monotonic()
+        if (now - self._bottom_last_t) < self._bottom_min_period:
+            return
+        self._bottom_last_t = now
+
         try:
             image = self.cv_bridge.imgmsg_to_cv2(msg, 'bgr8')
         except Exception as e:
@@ -265,7 +290,8 @@ class GreenDetectorNode(Node):
                 f'coverage={coverage:.3f}')
 
         self.bottom_pub.publish(pub_msg)
-        self._save_debug(image, mask, result, 'latest_green_bottom.jpg')
+        if self.p_save_debug:
+            self._save_debug(image, mask, result, 'latest_green_bottom.jpg')
 
 
 def main(args=None):

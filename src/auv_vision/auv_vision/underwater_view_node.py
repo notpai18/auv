@@ -111,6 +111,8 @@ class UnderwaterViewNode(Node):
         self.declare_parameter('disparity_topic',   '/disparity')
         self.declare_parameter('camera_info_topic', '/model/auv_box/stereo_front/left/camera_info')
         self.declare_parameter('output_topic',      '/auv/underwater_view/image_raw')
+        # Max publish rate — purely visual output, 5 Hz is indistinguishable from 10 Hz
+        self.declare_parameter('process_rate_hz',   5.0)
 
         g = lambda n: self.get_parameter(n).value
         # RGB order throughout; converted to the image's BGR order once, below.
@@ -122,6 +124,8 @@ class UnderwaterViewNode(Node):
         self.p_min_range = g('min_range')
         self.p_max_range = g('max_range')
         out_topic        = g('output_topic')
+        self._min_period = 1.0 / max(g('process_rate_hz'), 0.1)
+        self._last_proc_t: float = 0.0
         # ------------------------------------------------------------------ #
 
         # cv_bridge hands us bgr8, so flip both triples to BGR once here rather
@@ -180,6 +184,13 @@ class UnderwaterViewNode(Node):
 
     # ---------------------------------------------------------------------- #
     def _on_pair(self, img_msg: Image, disp_msg: DisparityImage):
+        # Rate limiter: purely visual output, no need to run at full camera rate
+        import time as _time
+        now = _time.monotonic()
+        if (now - self._last_proc_t) < self._min_period:
+            return
+        self._last_proc_t = now
+
         if self._range_scale is None:
             if not self._warned_no_info:
                 self.get_logger().warn(

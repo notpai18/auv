@@ -38,6 +38,8 @@ gate_detector_node:
     confidence_threshold:    0.10    # Min YOLO inference confidence to publish
     debug_image_dir:         ''      # '' = auto (~/.ros/yolo_debug); or set abs path
     model_weights:           'gate_detection_v8.pt'   # Testing v8 model
+    process_rate_hz:         5.0     # Max YOLO inference rate (camera ticks at 10 Hz)
+    save_debug_images:       false   # Set true only when actively debugging detections
 
 gate_localizer_node:
   ros__parameters:
@@ -60,6 +62,73 @@ trail_mapper_node:
     publish_hz:   1.0     # Hz — how often to publish /auv/trail_map
     odom_frame:   'map'   # TF frame used in nav_msgs/Path header
     log_dir:      '~/auv_ws/mission_logs'   # Directory for trail CSV logs
+
+# ── Depth control ────────────────────────────────────────────────────────
+
+depth_hold_node:
+  ros__parameters:
+    # target_depth: desired Z in the odom frame (negative = below water surface).
+    # NaN (default) → latch the first /auv/odom Z reading on startup.
+    # Set explicitly to match spawn_z so the AUV holds its spawn depth:
+    target_depth:      -4.23800   # m  (same as spawn_z in sim_mission.launch.py)
+    # PID gains — tuned for Gazebo VelocityControl + ~0.5 s settling on 0.2 m step
+    kp:                1.5
+    ki:                0.05
+    kd:                0.8
+    max_vertical_vel:  0.30   # m/s — vertical speed cap (thruster limit proxy)
+    deadband_m:        0.02   # m   — no output when error is smaller than this
+    odom_topic:        '/auv/odom'
+    output_topic:      '/auv/depth_cmd_vel'
+    setpoint_topic:    '/auv/set_target_depth'
+
+cmd_vel_mixer_node:
+  ros__parameters:
+    nav_topic:          '/auv/nav_cmd_vel'     # X/Y/yaw from navigators (remapped)
+    depth_topic:        '/auv/depth_cmd_vel'   # Z from depth_hold_node
+    output_topic:       '/model/auv_box/cmd_vel'   # to velocity_controller_node
+    publish_hz:         50.0    # merged output rate (Hz)
+    nav_timeout_sec:    0.5     # zero XY/yaw if navigator is silent
+    depth_timeout_sec:  1.0     # zero Z if depth controller is silent
+
+# ── Closed-loop Thruster Control & Propulsion ────────────────────────────
+
+velocity_controller_node:
+  ros__parameters:
+    cmd_vel_topic:      '/model/auv_box/cmd_vel'
+    odom_topic:         '/auv/odom'
+    wrench_topic:       '/auv/wrench_cmd'
+    control_rate_hz:    50.0
+    cmd_timeout_sec:    0.5
+    target_depth:       -4.23800   # m (matches spawn_z)
+    kp_surge:           30.0
+    ki_surge:           2.0
+    kd_surge:           2.0
+    kp_sway:            30.0
+    ki_sway:            2.0
+    kd_sway:            2.0
+    kp_depth:           35.0
+    ki_depth:           2.0
+    kd_depth:           15.0
+    kp_yaw:             10.0
+    ki_yaw:             0.5
+    kd_yaw:             0.8
+    kp_roll:            15.0
+    kd_roll:            3.0
+    kp_pitch:           15.0
+    kd_pitch:           3.0
+    max_force_x:        80.0
+    max_force_y:        80.0
+    max_force_z:        60.0
+    max_torque_z:       25.0
+    max_torque_xy:      20.0
+
+thruster_allocator_node:
+  ros__parameters:
+    wrench_topic:       '/auv/wrench_cmd'
+    max_thrust_n:       40.0
+    min_thrust_n:      -40.0
+    publish_rate_hz:    50.0
+    wrench_timeout_sec: 0.5
 
 # ── Green mat pipeline ───────────────────────────────────────────────────
 

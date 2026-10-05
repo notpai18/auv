@@ -18,9 +18,9 @@
     <!-- ============================================================
          PHYSICS & PLUGINS
     ============================================================ -->
-    <gravity>0 0 0</gravity>
-    <physics name="1ms" type="ignored">
-      <max_step_size>0.001</max_step_size>
+    <gravity>0 0 -9.81</gravity>
+    <physics name="4ms" type="ignored">
+      <max_step_size>0.004</max_step_size>
       <real_time_factor>1.0</real_time_factor>
     </physics>
 
@@ -29,6 +29,16 @@
     <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
     <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
       <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-buoyancy-system" name="gz::sim::systems::Buoyancy">
+      <graded_buoyancy>
+        <default_density>1025</default_density>
+        <density_change>
+          <above_depth>0</above_depth>
+          <density>1</density>
+        </density_change>
+      </graded_buoyancy>
+      <enable>auv_box::buoyancy_link</enable>
     </plugin>
 
     <!-- ============================================================

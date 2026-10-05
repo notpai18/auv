@@ -92,7 +92,8 @@ class BlueBinCvDetectorNode(Node):
 
         # Misc
         self.declare_parameter('debug_image_dir', '')
-        self.declare_parameter('process_rate_hz', 10.0)
+        self.declare_parameter('process_rate_hz', 5.0)
+        self.declare_parameter('save_debug_images', False)
 
         # Bind ----------------------------------------------------------------
         p = self.get_parameter
@@ -113,6 +114,7 @@ class BlueBinCvDetectorNode(Node):
         self.green_dilate_px  = int(p('green_dilate_px').value)
         self.morph_k          = int(p('morph_kernel_px').value)
         self.process_interval = 1.0 / p('process_rate_hz').value
+        self.p_save_debug     = p('save_debug_images').value
 
         raw_debug = p('debug_image_dir').value
         self.debug_dir = (
@@ -272,13 +274,14 @@ class BlueBinCvDetectorNode(Node):
 
         self.pub.publish(out)
 
-        # Debug image
-        try:
-            cv2.imwrite(
-                os.path.join(self.debug_dir, 'latest_blue_bin_cv_bottom.jpg'),
-                vis)
-        except Exception as e:
-            self.get_logger().warn(f'Debug image save failed: {e}')
+        # Debug image (only when explicitly enabled)
+        if self.p_save_debug:
+            try:
+                cv2.imwrite(
+                    os.path.join(self.debug_dir, 'latest_blue_bin_cv_bottom.jpg'),
+                    vis)
+            except Exception as e:
+                self.get_logger().warn(f'Debug image save failed: {e}')
 
 
 def main(args=None):

@@ -28,6 +28,10 @@ setup(
 
             # Green zone mission
             'green_navigator_node   = auv_planner.green_navigator_node:main',
+
+            # Depth control (thruster-based Z hold + cmd_vel merger)
+            'depth_hold_node        = auv_planner.depth_hold_node:main',
+            'cmd_vel_mixer_node     = auv_planner.cmd_vel_mixer_node:main',
         ],
     },
 )

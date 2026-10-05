@@ -24,6 +24,12 @@ class GateDetectorNode(Node):
         self.declare_parameter('debug_image_dir', '')
         # model_weights: filename of the .pt file inside the package weights/ dir
         self.declare_parameter('model_weights', 'gate_detection_v8.pt')
+        # process_rate_hz: max YOLO inference rate — camera may tick faster than this.
+        # 5 Hz is plenty for the gate FSM (navigator runs at 10 Hz with 1.5 s freshness).
+        self.declare_parameter('process_rate_hz', 5.0)
+        # save_debug_images: write annotated frame to disk each inference cycle.
+        # Disable during normal runs to avoid continuous disk I/O.
+        self.declare_parameter('save_debug_images', False)
 
         self.p_confidence_threshold = self.get_parameter('confidence_threshold').value
         raw_debug_dir               = self.get_parameter('debug_image_dir').value
@@ -31,7 +37,10 @@ class GateDetectorNode(Node):
             raw_debug_dir if raw_debug_dir
             else os.path.join(os.path.expanduser('~'), '.ros', 'yolo_debug')
         )
-        p_model_weights = self.get_parameter('model_weights').value
+        p_model_weights             = self.get_parameter('model_weights').value
+        self.p_min_period_sec       = 1.0 / max(self.get_parameter('process_rate_hz').value, 0.1)
+        self.p_save_debug           = self.get_parameter('save_debug_images').value
+        self._last_infer_time: float = 0.0
         # ------------------------------------------------------------------ #
 
         # 1. Initialize cv_bridge
@@ -65,6 +74,12 @@ class GateDetectorNode(Node):
         )
 
     def image_callback(self, msg):
+        # ── Rate limiter: skip frames so YOLO runs at most process_rate_hz ──
+        now = self.get_clock().now().nanoseconds * 1e-9
+        if (now - self._last_infer_time) < self.p_min_period_sec:
+            return
+        self._last_infer_time = now
+
         # Convert ROS Image to OpenCV BGR image
         try:
             cv_image = self.cv_bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
@@ -75,13 +90,14 @@ class GateDetectorNode(Node):
         # Run YOLO inference
         results = self.model(cv_image, verbose=False, conf=self.p_confidence_threshold)
         
-        # Generate and save debug image
-        try:
-            annotated_frame = results[0].plot()
-            debug_img_path = os.path.join(self.debug_dir, 'latest_detection.jpg')
-            cv2.imwrite(debug_img_path, annotated_frame)
-        except Exception as e:
-            self.get_logger().warn(f'Failed to save debug image: {e}')
+        # Generate and save debug image (only when explicitly enabled)
+        if self.p_save_debug:
+            try:
+                annotated_frame = results[0].plot()
+                debug_img_path = os.path.join(self.debug_dir, 'latest_detection.jpg')
+                cv2.imwrite(debug_img_path, annotated_frame)
+            except Exception as e:
+                self.get_logger().warn(f'Failed to save debug image: {e}')
         
         # Collect all valid detections
         valid_detections = []

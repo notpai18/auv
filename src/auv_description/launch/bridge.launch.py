@@ -24,7 +24,16 @@ def generate_launch_description():
             '/model/auv_box/odometry@nav_msgs/msg/Odometry[gz.msgs.Odometry',
             '/model/auv_box/stereo_front/left/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
             '/model/auv_box/stereo_front/right/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
-            '/model/auv_box/bottom/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo'
+            '/model/auv_box/bottom/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+            # 8 Physical Thruster command bridges (ROS Float64 -> Gazebo Double)
+            '/model/auv_box/joint/T_1/cmd_thrust@std_msgs/msg/Float64]gz.msgs.Double',
+            '/model/auv_box/joint/T_2/cmd_thrust@std_msgs/msg/Float64]gz.msgs.Double',
+            '/model/auv_box/joint/T_3/cmd_thrust@std_msgs/msg/Float64]gz.msgs.Double',
+            '/model/auv_box/joint/T_4/cmd_thrust@std_msgs/msg/Float64]gz.msgs.Double',
+            '/model/auv_box/joint/T_5/cmd_thrust@std_msgs/msg/Float64]gz.msgs.Double',
+            '/model/auv_box/joint/T_6/cmd_thrust@std_msgs/msg/Float64]gz.msgs.Double',
+            '/model/auv_box/joint/T_7/cmd_thrust@std_msgs/msg/Float64]gz.msgs.Double',
+            '/model/auv_box/joint/T_8/cmd_thrust@std_msgs/msg/Float64]gz.msgs.Double'
         ],
         output='screen'
     )

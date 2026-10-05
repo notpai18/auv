@@ -22,9 +22,9 @@
   <world name="auv_pool_world">
 
     <!-- ============================================================
-         PHYSICS - zero gravity for neutral buoyancy
+         PHYSICS - real gravity with buoyancy
     ============================================================ -->
-    <gravity>0 0 0</gravity>
+    <gravity>0 0 -9.81</gravity>
 
     <physics name="1ms" type="ignored">
       <max_step_size>0.001</max_step_size>
@@ -43,6 +43,17 @@
     <plugin filename="gz-sim-sensors-system"
             name="gz::sim::systems::Sensors">
       <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-buoyancy-system"
+            name="gz::sim::systems::Buoyancy">
+      <graded_buoyancy>
+        <default_density>1025</default_density>
+        <density_change>
+          <above_depth>0</above_depth>
+          <density>1</density>
+        </density_change>
+      </graded_buoyancy>
+      <enable>auv_box::buoyancy_link</enable>
     </plugin>
 
     <!-- ============================================================

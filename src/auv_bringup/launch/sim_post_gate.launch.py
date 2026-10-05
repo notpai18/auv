@@ -272,6 +272,22 @@ def generate_launch_description():
                 parameters=[sim_params_yaml],
             ),
 
+            # ── Propulsion & Controller ──────────────────────────────────
+            Node(
+                package='auv_controls',
+                executable='velocity_controller_node',
+                name='velocity_controller_node',
+                output='screen',
+                parameters=[sim_params_yaml],
+            ),
+            Node(
+                package='auv_propulsion',
+                executable='thruster_allocator_node',
+                name='thruster_allocator_node',
+                output='screen',
+                parameters=[sim_params_yaml],
+            ),
+
             # ── Visualisation ────────────────────────────────────────────
 
             # 12. RViz2

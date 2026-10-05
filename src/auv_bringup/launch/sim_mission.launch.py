@@ -33,25 +33,10 @@ Usage
   source ~/auv_ws/install/setup.bash
   ros2 launch auv_bringup sim_mission.launch.py
 
-Water model (DAVE)
-------------------
-  The default world is auv_description/worlds/dave_pool.sdf — the competition
-  pool carrying DAVE's ocean current plugins. Pool geometry, prop positions,
-  lighting, fog and physics are unchanged from the old camera_test.sdf: gravity
-  is still zero and buoyancy is off, so the AUV holds its spawn depth and the
-  vision pipeline needs no retuning. DAVE graded buoyancy is present in that
-  file but commented out, with the steps to enable it.
-
-  This needs dave_ws for the current plugins. Their paths are injected below, so
-  sourcing dave_ws by hand is optional but harmless.
-
-  Either world can be used interchangeably:
-    world:=$HOME/auv_ws/camera_test.sdf
-
 Optional arguments
 ------------------
   world:=<path>     Path to .sdf world file
-                    (default: auv_description/worlds/dave_pool.sdf)
+                    (default: ~/auv_ws/camera_test.sdf)
   spawn_x:=1.0      AUV spawn X position (default: 1.0)
   spawn_y:=4.0      AUV spawn Y position (default: 4.0)
   spawn_z:=-4.23800 AUV spawn Z position (default: -4.23800)
@@ -87,64 +72,11 @@ def generate_launch_description():
     os.environ.setdefault('SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS', '0')
     os.environ.setdefault('GDK_BACKEND', 'x11')
 
-    # ── DAVE workspace discovery ─────────────────────────────────────────
-    # The DAVE world plugins live in a separate workspace. Rather than require
-    # `source ~/dave_ws/install/setup.bash` before every run, find that install
-    # tree here and inject the two things Gazebo and the plugins need:
-    #
-    #   GZ_SIM_SYSTEM_PLUGIN_PATH — so Gazebo can dlopen
-    #     libOceanCurrentWorldPlugin.so and libOceanCurrentPlugin.so. Note these
-    #     sit directly in <pkg>/lib/, not in the <pkg>/lib/<pkg>/ subdirectory
-    #     the packages' own .dsv hooks point at, and those hooks are not even
-    #     present in the installed share/ tree — so relying on them fails.
-    #
-    #   AMENT_PREFIX_PATH — OceanCurrentWorldPlugin calls
-    #     get_package_share_directory("dave_worlds") while loading its transient
-    #     current database, which throws if dave_worlds cannot be resolved.
-    #
-    # Override the location with DAVE_WS if the workspace lives elsewhere.
-    dave_ws = os.environ.get('DAVE_WS', os.path.expanduser('~/dave_ws'))
-    dave_install = os.path.join(dave_ws, 'install')
-
-    dave_env = {}
-    if os.path.isdir(dave_install):
-        plugin_dirs = [
-            os.path.join(dave_install, 'dave_gz_world_plugins', 'lib'),
-            os.path.join(dave_install, 'dave_ros_gz_plugins', 'lib'),
-            os.path.join(dave_install, 'dave_gz_model_plugins', 'lib'),
-            os.path.join(dave_install, 'dave_gz_sensor_plugins', 'lib'),
-        ]
-        plugin_dirs = [d for d in plugin_dirs if os.path.isdir(d)]
-
-        ament_dirs = [
-            os.path.join(dave_install, pkg)
-            for pkg in ('dave_worlds', 'dave_robot_models', 'dave_object_models',
-                        'dave_sensor_models')
-        ]
-        ament_dirs = [d for d in ament_dirs if os.path.isdir(d)]
-
-        def _prepend(var, dirs):
-            existing = os.environ.get(var, '')
-            parts = [p for p in existing.split(os.pathsep) if p]
-            merged = dirs + [p for p in parts if p not in dirs]
-            return os.pathsep.join(merged)
-
-        if plugin_dirs:
-            dave_env['GZ_SIM_SYSTEM_PLUGIN_PATH'] = _prepend(
-                'GZ_SIM_SYSTEM_PLUGIN_PATH', plugin_dirs)
-            # Plugins link against DAVE's own shared libs (gauss_markov_process,
-            # tidal_oscillation, the msgs library) which sit alongside them.
-            dave_env['LD_LIBRARY_PATH'] = _prepend('LD_LIBRARY_PATH', plugin_dirs)
-        if ament_dirs:
-            dave_env['AMENT_PREFIX_PATH'] = _prepend('AMENT_PREFIX_PATH', ament_dirs)
-
     # ── Launch arguments (override at CLI with arg:=value) ───────────────
     world_arg = DeclareLaunchArgument(
         'world',
-        default_value=os.path.join(
-            get_package_share_directory('auv_description'), 'worlds', 'dave_pool.sdf'
-        ),
-        description='Path to Gazebo world SDF file (default: DAVE-water pool)'
+        default_value=os.path.expanduser('~/auv_ws/camera_test.sdf'),
+        description='Path to Gazebo world SDF file'
     )
     spawn_x_arg   = DeclareLaunchArgument('spawn_x',   default_value='14.0')
     spawn_y_arg   = DeclareLaunchArgument('spawn_y',   default_value='4.0')
@@ -156,6 +88,15 @@ def generate_launch_description():
     spawn_y   = LaunchConfiguration('spawn_y')
     spawn_z   = LaunchConfiguration('spawn_z')
     spawn_yaw = LaunchConfiguration('spawn_yaw')
+
+    # Visual tools — disabled by default to reduce GPU/CPU load during development.
+    # Enable with: ros2 launch auv_bringup sim_mission.launch.py rviz:=true
+    rviz_arg      = DeclareLaunchArgument('rviz',       default_value='false',
+                                          description='Launch RViz2 visualiser')
+    image_view_arg = DeclareLaunchArgument('image_view', default_value='false',
+                                           description='Launch live camera image_view')
+    rviz_on      = LaunchConfiguration('rviz')
+    image_view_on = LaunchConfiguration('image_view')
 
     # ── Package share paths ───────────────────────────────────────────────
     auv_desc_share  = get_package_share_directory('auv_description')
@@ -183,11 +124,6 @@ def generate_launch_description():
         'GDK_BACKEND': 'x11',                  # force X11 for reliable xinput
         'GZ_SIM_RESOURCE_PATH': workspace_share_dir,
     }
-    # DAVE plugin/resource paths (empty dict if dave_ws was not found — Gazebo
-    # then fails to load the ocean current plugins and logs an error, but the
-    # world itself, including gravity and graded buoyancy, still runs).
-    gazebo_env.update(dave_env)
-
     gazebo = ExecuteProcess(
         cmd=['gz', 'sim', '-r', world],
         output='log',
@@ -394,46 +330,71 @@ def generate_launch_description():
 
             # 11. Gate navigator v2 — forward 8 m, strafe search, track, align, cross
             #     Publishes /auv/mission_state == 'DONE' when gate is crossed.
-            #     To revert to round-trip navigator change executable to 'gate_navigator_node'
+            #     Remapped: cmd_vel goes to /auv/nav_cmd_vel (not directly to Gazebo);
+            #     cmd_vel_mixer_node adds depth Z and forwards to /model/auv_box/cmd_vel.
             Node(
                 package='auv_planner',
                 executable='gate_navigator_v2_node',
                 name='gate_navigator_v2_node',
                 output='log',
                 parameters=[sim_params_yaml],
+                remappings=[('/model/auv_box/cmd_vel', '/auv/nav_cmd_vel')],
             ),
 
             # 12. Green navigator — IDLE until gate DONE, then finds green mat.
-            #     Final states: HOLD → FINAL_DONE (full stop over green zone).
+            #     Same cmd_vel remapping as gate navigator above.
             Node(
                 package='auv_planner',
                 executable='green_navigator_node',
                 name='green_navigator_node',
                 output='log',
                 parameters=[sim_params_yaml],
+                remappings=[('/model/auv_box/cmd_vel', '/auv/nav_cmd_vel')],
             ),
 
-            # ── Visualisation ────────────────────────────────────────────
+            # ── Depth control ─────────────────────────────────────────────
 
-            # 13. RViz2 (pre-configured — no GUI setup needed)
-            ExecuteProcess(
-                cmd=['rviz2', '-d', rviz_config],
-                output='log',
-                name='rviz2'
-            ),
-
-            # 14. Live left camera view — shows the HAZED feed, so what you
-            #     watch looks underwater. The detectors are unaffected; they
-            #     still read the raw topic. To watch the raw feed instead,
-            #     point this back at
-            #     /model/auv_box/stereo_front/left/image_raw
+            # 13. Depth PID — reads /auv/odom Z, publishes linear.z to /auv/depth_cmd_vel
             Node(
-                package='image_view',
-                executable='image_view',
-                name='camera_view',
+                package='auv_planner',
+                executable='depth_hold_node',
+                name='depth_hold_node',
                 output='log',
-                remappings=[('image', '/auv/underwater_view/image_raw')],
+                parameters=[sim_params_yaml],
             ),
+
+            # 14. CmdVel mixer — blends /auv/nav_cmd_vel (XY/yaw) + /auv/depth_cmd_vel (Z)
+            #     → /model/auv_box/cmd_vel
+            Node(
+                package='auv_planner',
+                executable='cmd_vel_mixer_node',
+                name='cmd_vel_mixer_node',
+                output='log',
+                parameters=[sim_params_yaml],
+            ),
+
+            # 15. Closed-loop 6-DOF velocity & attitude controller
+            #     Consumes /model/auv_box/cmd_vel + /auv/odom -> /auv/wrench_cmd
+            Node(
+                package='auv_controls',
+                executable='velocity_controller_node',
+                name='velocity_controller_node',
+                output='log',
+                parameters=[sim_params_yaml],
+            ),
+
+            # 16. Moore-Penrose pseudo-inverse thruster allocation
+            #     Consumes /auv/wrench_cmd -> 8 thruster cmd_thrust topics
+            Node(
+                package='auv_propulsion',
+                executable='thruster_allocator_node',
+                name='thruster_allocator_node',
+                output='log',
+                parameters=[sim_params_yaml],
+            ),
+
+            # 13+14. RViz2 and image_view are opt-in — launched below as
+            # conditional nodes (rviz:=true / image_view:=true at CLI).
 
             # 15. Mission monitor — prints real-time status in the launch terminal.
             # Kept on 'screen' (every other node above is 'log') so this is the
@@ -448,6 +409,28 @@ def generate_launch_description():
         ]
     )
 
+    from launch.conditions import IfCondition
+
+    # 13. RViz2 — opt-in (disabled by default to free up GPU during development)
+    #     Enable: ros2 launch auv_bringup sim_mission.launch.py rviz:=true
+    rviz_proc = ExecuteProcess(
+        cmd=['rviz2', '-d', rviz_config],
+        output='log',
+        name='rviz2',
+        condition=IfCondition(rviz_on),
+    )
+
+    # 14. Live camera view — opt-in
+    #     Enable: ros2 launch auv_bringup sim_mission.launch.py image_view:=true
+    cam_view_node = Node(
+        package='image_view',
+        executable='image_view',
+        name='camera_view',
+        output='log',
+        remappings=[('image', '/auv/underwater_view/image_raw')],
+        condition=IfCondition(image_view_on),
+    )
+
     return LaunchDescription([
         # Arguments
         world_arg,
@@ -455,6 +438,8 @@ def generate_launch_description():
         spawn_y_arg,
         spawn_z_arg,
         spawn_yaw_arg,
+        rviz_arg,
+        image_view_arg,
 
         # Sequence
         LogInfo(msg='[sim_mission] Launching AUV gate mission (simulation)...'),
@@ -465,4 +450,6 @@ def generate_launch_description():
         bridge,
         stereo_proc,
         ros_nodes,
+        rviz_proc,
+        cam_view_node,
     ])
