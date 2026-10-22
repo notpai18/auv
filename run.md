@@ -2,11 +2,23 @@
 
 # ════════════════════════════════════════════════════════════
 # OPTION A1 — Full mission (gate → green mat)
-# Starts everything automatically in the correct order.
+# Starts EVERYTHING automatically in the correct order:
+#   • Gazebo Harmonic Simulator + Pool World
+#   • AUV Model Spawner
+#   • ROS <-> Gazebo Bridge (Thrusters, Odom, CmdVel, Cameras, IMU, Magnetometer)
+#   • Stereo Depth Processing (stereo_image_proc)
+#   • Sensor Layer (depth_sensor, dvl_sensor, sensor_fusion_node, safety_supervisor_node, leak_mock, battery_mock)
+#   • Computer Vision (YOLOv8 gate, stereo 3D localizer, HSV green, blue bin, underwater view)
+#   • Telemetry & Dashboard (CSV mission_logger, trail_mapper, live mission_monitor)
+#   • Navigation & Closed-Loop 6-DOF Control (gate_nav_v2, green_nav, depth_hold, cmd_vel_mixer, velocity_controller, thruster_allocator)
+#   • Visual Tools (RViz2 3D visualizer + live camera image_view)
 # Wait ~14 seconds for all nodes to come up.
 # ════════════════════════════════════════════════════════════
 source ~/auv_ws/install/setup.bash
 ros2 launch auv_bringup sim_mission.launch.py
+
+# Run completely headless (no Gazebo, RViz, or image_view GUI windows):
+# ros2 launch auv_bringup sim_mission.launch.py headless:=true
 
 # Custom spawn position (optional args):
 # ros2 launch auv_bringup sim_mission.launch.py spawn_x:=14.0 spawn_y:=4.0 spawn_z:=-4.238 spawn_yaw:=1.57
@@ -70,6 +82,13 @@ ros2 launch auv_description bridge.launch.py
 # source ~/auv_ws/install/setup.bash
 # ros2 run auv_propulsion thruster_allocator_node &
 # ros2 run auv_controls velocity_controller_node &
+
+# ════════════════════════════════════════════════════════════
+# TERMINAL 3c — AUV Sensor Layer (Depth, Leak, Battery)
+# Publishes: /auv/depth, /auv/depth/pressure, /auv/leak, /auv/battery
+# ════════════════════════════════════════════════════════════
+# source ~/auv_ws/install/setup.bash
+# ros2 launch auv_sensors sensors.launch.py launch_bridge:=false
 
 # ════════════════════════════════════════════════════════════
 # TERMINAL 4 — Stereo depth processing (disparity)

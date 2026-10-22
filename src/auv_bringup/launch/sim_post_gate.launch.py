@@ -259,6 +259,44 @@ def generate_launch_description():
                 parameters=[sim_params_yaml],
             ),
 
+            # ── Sensors Layer ────────────────────────────────────────────
+            Node(
+                package='auv_sensors',
+                executable='depth_sensor',
+                name='depth_sensor',
+                output='log',
+            ),
+            Node(
+                package='auv_sensors',
+                executable='dvl_sensor',
+                name='dvl_sensor',
+                output='log',
+            ),
+            Node(
+                package='auv_sensors',
+                executable='sensor_fusion_node',
+                name='sensor_fusion_node',
+                output='log',
+            ),
+            Node(
+                package='auv_sensors',
+                executable='safety_supervisor_node',
+                name='safety_supervisor_node',
+                output='log',
+            ),
+            Node(
+                package='auv_sensors',
+                executable='leak_mock',
+                name='leak_mock',
+                output='log',
+            ),
+            Node(
+                package='auv_sensors',
+                executable='battery_mock',
+                name='battery_mock',
+                output='log',
+            ),
+
             # ── Planner ──────────────────────────────────────────────────
 
             # 11. Green navigator — waits for /auv/mission_state == 'DONE'.

@@ -48,3 +48,52 @@ trail_mapper_node:
     publish_hz:   1.0
     odom_frame:   'odom'   # real hardware uses 'odom' from robot_localization EKF
     log_dir:      '~/auv_ws/mission_logs'
+
+# Real Hardware Sensors Layer
+depth_sensor:
+  ros__parameters:
+    surface_z:             0.0
+    water_density:         1025.0
+    atmospheric_pressure:  101325.0
+    gravity:               9.81
+    publish_rate_hz:       20.0
+
+dvl_sensor:
+  ros__parameters:
+    publish_rate_hz:       20.0
+    velocity_noise_std:    0.005
+    altitude_noise_std:    0.01
+    pool_floor_z:          -5.0
+    max_range_m:           50.0
+    min_range_m:           0.1
+    beam_angle_deg:        25.0
+    frame_id:              'dvl_link'
+    base_frame_id:         'base_link'
+    odom_frame_id:         'odom'
+
+sensor_fusion_node:
+  ros__parameters:
+    imu_topic:             '/auv/imu'
+    mag_topic:             '/auv/magnetometer'
+    depth_topic:           '/auv/depth'
+    dvl_topic:             '/auv/dvl/velocity'
+    publish_rate_hz:       50.0
+    alpha_tilt:            0.05
+    beta_yaw:              0.04
+    gamma_depth:           0.15
+    magnetic_declination_deg: 0.0
+
+safety_supervisor_node:
+  ros__parameters:
+    leak_topic:            '/auv/leak'
+    battery_topic:         '/auv/battery'
+    imu_topic:             '/auv/imu'
+    depth_topic:           '/auv/depth'
+    cmd_vel_topic:         '/model/auv_box/cmd_vel'
+    monitor_rate_hz:       10.0
+    min_battery_voltage:   13.6
+    min_battery_percentage: 0.15
+    max_tilt_deg:          50.0
+    max_depth_m:           8.0
+    emergency_surface_vel: 0.30
+    auto_override_cmd_vel: true

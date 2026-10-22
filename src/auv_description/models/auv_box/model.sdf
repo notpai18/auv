@@ -43,6 +43,21 @@
           </box>
         </geometry>
       </collision>
+
+      <!-- IMU (BNO055) -->
+      <sensor name="imu_sensor" type="imu">
+        <always_on>true</always_on>
+        <update_rate>100</update_rate>
+        <topic>/auv/imu</topic>
+        <gz:frame_id>base_link</gz:frame_id>
+      </sensor>
+
+      <!-- Magnetometer -->
+      <sensor name="magnetometer_sensor" type="magnetometer">
+        <always_on>true</always_on>
+        <update_rate>50</update_rate>
+        <topic>/auv/magnetometer</topic>
+      </sensor>
     </link>
 
     <!-- Camera 1 - Front Left -->

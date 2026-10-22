@@ -39,7 +39,8 @@ cmd_angular_z        : commanded yaw rate (rad/s)
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String, Float32MultiArray
+from std_msgs.msg import String, Float32MultiArray, Float32, Bool
+from sensor_msgs.msg import BatteryState, FluidPressure
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
 import math
@@ -87,6 +88,12 @@ class MissionLoggerNode(Node):
         self.cmd_linear_x  = None
         self.cmd_angular_z = None
 
+        self.sensor_depth       = None
+        self.sensor_pressure    = None
+        self.sensor_leak        = None
+        self.sensor_battery_pct = None
+        self.sensor_battery_v   = None
+
         # ── CSV file ─────────────────────────────────────────────────────
         log_dir = self.p_log_dir
         os.makedirs(log_dir, exist_ok=True)
@@ -116,6 +123,8 @@ class MissionLoggerNode(Node):
             'nav_yolo_fresh', 'nav_yolo_age_sec', 'nav_source',
             # commands
             'cmd_linear_x', 'cmd_angular_z',
+            # sensors
+            'depth_m', 'pressure_pa', 'leak_detected', 'battery_pct', 'battery_v',
         ])
 
         self.get_logger().info(f'Mission Logger started. Logging to: {self.log_filepath}')
@@ -128,6 +137,12 @@ class MissionLoggerNode(Node):
         self.create_subscription(Float32MultiArray,'/auv/gate_position_3d',   self.gate_3d_callback,   10)
         self.create_subscription(Float32MultiArray,'/auv/navigator_debug',    self.nav_debug_callback, 10)
         self.create_subscription(Twist,            '/model/auv_box/cmd_vel',  self.cmd_callback,       10)
+
+        # Sensor layer subscribers
+        self.create_subscription(Float32,          '/auv/depth',              self.depth_callback,     10)
+        self.create_subscription(FluidPressure,    '/auv/depth/pressure',     self.pressure_callback,  10)
+        self.create_subscription(Bool,             '/auv/leak',               self.leak_callback,      10)
+        self.create_subscription(BatteryState,     '/auv/battery',            self.battery_callback,   10)
 
         self.create_timer(1.0, self.log_tick)   # 1 Hz — ~60-120 rows per run
 
@@ -171,6 +186,19 @@ class MissionLoggerNode(Node):
     def cmd_callback(self, msg):
         self.cmd_linear_x  = msg.linear.x
         self.cmd_angular_z = msg.angular.z
+
+    def depth_callback(self, msg):
+        self.sensor_depth = msg.data
+
+    def pressure_callback(self, msg):
+        self.sensor_pressure = msg.fluid_pressure
+
+    def leak_callback(self, msg):
+        self.sensor_leak = msg.data
+
+    def battery_callback(self, msg):
+        self.sensor_battery_pct = msg.percentage * 100.0
+        self.sensor_battery_v   = msg.voltage
 
     # ── Helper ───────────────────────────────────────────────────────────
 
@@ -256,6 +284,10 @@ class MissionLoggerNode(Node):
             self.f(nav_fresh, 0),  self.f(nav_age, 2), self.f(nav_src, 0),
             # commands
             self.f(self.cmd_linear_x, 3), self.f(self.cmd_angular_z, 4),
+            # sensors
+            self.f(self.sensor_depth, 2), self.f(self.sensor_pressure, 1),
+            (1 if self.sensor_leak else 0) if self.sensor_leak is not None else '',
+            self.f(self.sensor_battery_pct, 1), self.f(self.sensor_battery_v, 2),
         ]
 
         self.csv_writer.writerow(row)

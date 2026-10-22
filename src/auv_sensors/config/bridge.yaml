@@ -1,0 +1,55 @@
+# ros_gz_bridge config for the AUV sensors (Gazebo Harmonic).
+# Each entry copies one Gazebo topic to one ROS 2 topic.
+
+# --- IMU (BNO055 9-DOF) ---
+- ros_topic_name: "/auv/imu"
+  gz_topic_name: "/auv/imu"
+  ros_type_name: "sensor_msgs/msg/Imu"
+  gz_type_name: "gz.msgs.IMU"
+  direction: GZ_TO_ROS
+
+# --- Magnetometer ---
+- ros_topic_name: "/auv/magnetometer"
+  gz_topic_name: "/auv/magnetometer"
+  ros_type_name: "sensor_msgs/msg/MagneticField"
+  gz_type_name: "gz.msgs.Magnetometer"
+  direction: GZ_TO_ROS
+
+# --- Front Stereo Camera (Left & Right) ---
+- ros_topic_name: "/auv/stereo_front/left/image_raw"
+  gz_topic_name: "/model/auv_box/stereo_front/left/image_raw"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/auv/stereo_front/right/image_raw"
+  gz_topic_name: "/model/auv_box/stereo_front/right/image_raw"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+# --- Bottom Camera ---
+- ros_topic_name: "/auv/bottom/image_raw"
+  gz_topic_name: "/model/auv_box/bottom/image_raw"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+# --- Camera Calibration Info ---
+- ros_topic_name: "/auv/stereo_front/left/camera_info"
+  gz_topic_name: "/model/auv_box/stereo_front/left/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/auv/stereo_front/right/camera_info"
+  gz_topic_name: "/model/auv_box/stereo_front/right/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/auv/bottom/camera_info"
+  gz_topic_name: "/model/auv_box/bottom/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS

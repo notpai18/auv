@@ -193,6 +193,13 @@ class GreenNavigatorNode(Node):
         self.current_z   = None
         self.current_yaw = None
 
+        # Initial spawn pose (latched on first odom message for return-to-home)
+        self.initial_x     = None
+        self.initial_y     = None
+        self.initial_z     = None
+        self.initial_yaw   = None
+        self.return_logged = False
+
         # Ticks / counters
         self.center_ticks          = 0
         self.rise_ticks            = 0
@@ -234,6 +241,7 @@ class GreenNavigatorNode(Node):
         self.cmd_pub   = self.create_publisher(Twist,            '/model/auv_box/cmd_vel',      10)
         self.state_pub = self.create_publisher(String,           '/auv/green_mission_state',    10)
         self.debug_pub = self.create_publisher(Float32MultiArray,'/auv/green_navigator_debug',  10)
+        self.depth_target_pub = self.create_publisher(Float32,   '/auv/set_target_depth',       10)
 
         self.create_timer(0.1, self._control_loop)
         self.get_logger().info('Navigator started. Waiting for gate DONE...')
@@ -312,6 +320,16 @@ class GreenNavigatorNode(Node):
         siny  = 2.0 * (q.w * q.z + q.x * q.y)
         cosy  = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
         self.current_yaw = math.atan2(siny, cosy)
+
+        if self.initial_x is None:
+            self.initial_x = self.current_x
+            self.initial_y = self.current_y
+            self.initial_z = self.current_z
+            self.initial_yaw = self.current_yaw
+            self.get_logger().info(
+                f'[Home] Latched initial spawn position: ({self.initial_x:.2f}, {self.initial_y:.2f}, {self.initial_z:.2f}) '
+                f'yaw={math.degrees(self.initial_yaw):.1f}°'
+            )
 
     def _gate_mission_callback(self, msg):
         if msg.data != self.last_gate_msg:
@@ -566,6 +584,13 @@ class GreenNavigatorNode(Node):
         straight to the blue-bin search instead (its YOLO detection is
         reliable on its own — no need to gate the whole mission on ever
         visually confirming the mat first)."""
+        # If blue bin is already spotted by YOLO, advance directly to it
+        if self._is_blue_bin_fresh() and self.blue_bin_odom_x is not None:
+            self.get_logger().info(
+                f'★ Blue bin spotted directly at ({self.blue_bin_odom_x:.1f}, {self.blue_bin_odom_y:.1f}) -> APPROACH_BLUE_BIN'
+            )
+            return 'APPROACH_BLUE_BIN'
+
         result = self._run_lateral_search(
             'green', self._is_green_fresh,
             lambda: (self.green_odom_x, self.green_odom_y),
@@ -656,6 +681,11 @@ class GreenNavigatorNode(Node):
             self._publish_zero()
             return 'RISE_FOR_SURVEY'
 
+        # Command depth controllers to rise to survey altitude
+        d_msg = Float32()
+        d_msg.data = float(self.p_bin_survey_z)
+        self.depth_target_pub.publish(d_msg)
+
         remaining = self.p_bin_survey_z - self.current_z
         if remaining <= self.p_survey_z_tolerance:
             self._publish_zero()
@@ -664,8 +694,8 @@ class GreenNavigatorNode(Node):
             )
             return 'RESET_YAW'
 
+        # Maintain horizontal station while ascending
         cmd = Twist()
-        cmd.linear.z = self.p_rise_speed
         self.cmd_pub.publish(cmd)
         return 'RISE_FOR_SURVEY'
 
@@ -874,12 +904,79 @@ class GreenNavigatorNode(Node):
             self.get_logger().info('★ HOLDING OVER TARGET ★')
             self.hold_logged = True
         self.hold_tick += 1
-        return 'FINAL_DONE' if self.hold_tick >= self.p_hold_ticks else 'HOLD'
+        if self.hold_tick >= self.p_hold_ticks:
+            self.get_logger().info('★ TARGET HELD — INITIATING RETURN TO INITIAL POSITION ★')
+            return 'RETURN_TO_START'
+        return 'HOLD'
+
+    def _state_return_to_start(self):
+        """Drive back toward the initial spawn position (self.initial_x, self.initial_y)."""
+        if self.initial_x is None or self.current_x is None:
+            return 'FINAL_DONE'
+
+        dist = self._odom_distance(self.initial_x, self.initial_y)
+        bearing_err = self._bearing_error(self.initial_x, self.initial_y)
+
+        if not self.return_logged:
+            self.get_logger().info(
+                f'[RETURN] Navigating back to initial position: ({self.initial_x:.2f}, {self.initial_y:.2f}, {self.initial_z:.2f}), dist={dist:.2f}m'
+            )
+            self.return_logged = True
+
+        # Ensure vehicle returns to initial spawn depth
+        if self.initial_z is not None:
+            d_msg = Float32()
+            d_msg.data = float(self.initial_z)
+            self.depth_target_pub.publish(d_msg)
+
+        # When within 0.6 m of initial position, switch to heading alignment
+        if dist is not None and dist <= 0.60:
+            self.get_logger().info(f'[RETURN] Reached initial position (dist={dist:.2f}m) -> RETURN_ALIGN')
+            self._publish_zero()
+            return 'RETURN_ALIGN'
+
+        if bearing_err is None:
+            self._publish_zero()
+            return 'RETURN_TO_START'
+
+        cmd = Twist()
+        # Turn in place if heading differs by more than 0.45 rad (~25 deg)
+        if abs(bearing_err) > 0.45:
+            cmd.linear.x = 0.0
+            cmd.angular.z = self._clamp(self.p_approach_p_gain * bearing_err, self.p_angular_clamp)
+        else:
+            # Cruise back toward initial position, tapering speed as we arrive
+            speed = self.p_approach_speed if dist > 2.0 else max(self.p_center_speed, self.p_approach_speed * (dist / 2.0))
+            cmd.linear.x = speed
+            cmd.angular.z = self._clamp(self.p_approach_p_gain * bearing_err, self.p_angular_clamp)
+
+        self.cmd_pub.publish(cmd)
+        return 'RETURN_TO_START'
+
+    def _state_return_align(self):
+        """Rotate in place to match the initial spawn heading."""
+        target_yaw = self.initial_yaw if self.initial_yaw is not None else self.latest_forward_yaw
+        if target_yaw is None or self.current_yaw is None:
+            return 'FINAL_DONE'
+
+        yaw_err = self._normalize_angle(target_yaw - self.current_yaw)
+        if abs(yaw_err) < self.p_yaw_reset_threshold:
+            self._publish_zero()
+            self.get_logger().info(
+                f'★ ALIGNED TO INITIAL HEADING ({math.degrees(target_yaw):.1f}°) — MISSION COMPLETE! ★'
+            )
+            return 'FINAL_DONE'
+
+        cmd = Twist()
+        cmd.linear.x = 0.0
+        cmd.angular.z = self._clamp(self.p_approach_p_gain * yaw_err, self.p_angular_clamp)
+        self.cmd_pub.publish(cmd)
+        return 'RETURN_ALIGN'
 
     def _state_final_done(self):
         self._publish_zero()
         if not self.done_logged:
-            self.get_logger().info('★★★ MISSION COMPLETE ★★★')
+            self.get_logger().info('★★★ MISSION COMPLETE — RETURNED TO INITIAL POSITION ★★★')
             self.done_logged = True
         return 'FINAL_DONE'
 
@@ -902,6 +999,8 @@ class GreenNavigatorNode(Node):
             'RISE_FOR_VERIFICATION': self._state_rise_for_verification,
             'CENTER_BLUE_BIN':       self._state_center_blue_bin,
             'HOLD':                  self._state_hold,
+            'RETURN_TO_START':       self._state_return_to_start,
+            'RETURN_ALIGN':          self._state_return_align,
             'FINAL_DONE':            self._state_final_done,
         }
         handler = dispatch.get(self.state)

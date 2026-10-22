@@ -101,6 +101,7 @@ class GateNavigatorV2Node(Node):
         # Gate position in odom frame
         self.gate_odom_x = None
         self.gate_odom_y = None
+        self.consecutive_outliers = 0
 
         # Odometry
         self.current_x   = None
@@ -225,12 +226,21 @@ class GateNavigatorV2Node(Node):
                 (new_gate_odom_y - self.gate_odom_y) ** 2
             )
             if jump > self.p_max_gate_odom_jump:
-                self.get_logger().warn(
-                    f'[YOLO OUTLIER] gate_odom jump {jump:.2f}m > '
-                    f'{self.p_max_gate_odom_jump}m -- discarding frame '
-                    f'(body: fwd={x_body:.2f}m left={y_body:.2f}m conf={confidence:.2f})'
-                )
-                return
+                self.consecutive_outliers += 1
+                if self.consecutive_outliers < 3:
+                    self.get_logger().warn(
+                        f'[YOLO OUTLIER] gate_odom jump {jump:.2f}m > '
+                        f'{self.p_max_gate_odom_jump}m ({self.consecutive_outliers}/3) -- discarding frame '
+                        f'(body: fwd={x_body:.2f}m left={y_body:.2f}m conf={confidence:.2f})'
+                    )
+                    return
+                else:
+                    self.get_logger().info(
+                        f'[YOLO RE-LATCH] Persistent gate jump ({jump:.2f}m confirmed across 3 frames). Re-latching gate_odom.'
+                    )
+                    self.consecutive_outliers = 0
+            else:
+                self.consecutive_outliers = 0
 
         self.gate_odom_x = new_gate_odom_x
         self.gate_odom_y = new_gate_odom_y

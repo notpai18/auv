@@ -13,7 +13,8 @@ Usage:
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String, Float32MultiArray
+from std_msgs.msg import String, Float32MultiArray, Float32, Bool
+from sensor_msgs.msg import BatteryState, FluidPressure
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
 import math
@@ -47,13 +48,19 @@ GATE_STATES = {
 }
 
 GREEN_STATES = {
-    'IDLE':               'Waiting for gate phase to finish...',
-    'SEARCH_GREEN':       'Searching for green mat (turning)',
-    'APPROACH_GREEN':     'Driving to green mat center',
-    'SEARCH_BLUE_BIN':    'Scanning green mat for blue bin',
-    'APPROACH_BLUE_BIN':  'Approaching blue bin',
-    'HOLD':               'Holding position directly over target',
-    'FINAL_DONE':         'MISSION COMPLETE',
+    'IDLE':                  'Waiting for gate phase to finish...',
+    'RESET_YAW':             'Aligning camera heading forward',
+    'SEARCH_GREEN':          'Searching for green mat (creeping sweep)',
+    'APPROACH_GREEN':        'Driving to green mat center',
+    'RISE_FOR_SURVEY':       'Ascending to survey altitude for bottom cam',
+    'SEARCH_BLUE_BIN':       'Scanning green mat for blue bin',
+    'APPROACH_BLUE_BIN':     'Approaching blue bin target',
+    'RISE_FOR_VERIFICATION': 'Ascending for wider bottom cam verification',
+    'CENTER_BLUE_BIN':       'Fine-centering over blue bin with bottom cam',
+    'HOLD':                  'Holding position directly over target',
+    'RETURN_TO_START':       'Returning to initial spawn position',
+    'RETURN_ALIGN':          'Aligning heading to initial orientation',
+    'FINAL_DONE':            'MISSION COMPLETE — RETURNED HOME',
 }
 
 W = 75   # panel width
@@ -66,6 +73,7 @@ class MissionMonitorNode(Node):
 
         # Telemetry
         self._odom_x = self._odom_y = self._odom_z = self._odom_yaw = 0.0
+        self._odom_roll = self._odom_pitch = 0.0
         self._cmd_lin = self._cmd_ang = 0.0
         self._ready_odom = False
         self._ready_cmd = False
@@ -80,6 +88,15 @@ class MissionMonitorNode(Node):
         self._green_pos = []
         self._blue_bin_pos = []
 
+        # Sensor state
+        self._depth = None
+        self._pressure_kpa = None
+        self._battery_pct = None
+        self._battery_v = None
+        self._leak = False
+        self._dvl_alt = None
+        self._safety_status = "NOMINAL"
+
         # Subscriptions
         self.create_subscription(Odometry, '/auv/odom', self._odom_cb, 10)
         self.create_subscription(Twist, '/model/auv_box/cmd_vel', self._cmd_cb, 10)
@@ -92,6 +109,14 @@ class MissionMonitorNode(Node):
         self.create_subscription(Float32MultiArray, '/auv/green_position_3d', self._green_pos_cb, 10)
         self.create_subscription(Float32MultiArray, '/auv/blue_bin_position_3d', self._blue_bin_pos_cb, 10)
 
+        # Sensors
+        self.create_subscription(Float32, '/auv/depth', self._depth_cb, 10)
+        self.create_subscription(FluidPressure, '/auv/depth/pressure', self._press_cb, 10)
+        self.create_subscription(Bool, '/auv/leak', self._leak_cb, 10)
+        self.create_subscription(BatteryState, '/auv/battery', self._batt_cb, 10)
+        self.create_subscription(Float32, '/auv/dvl/altitude', self._dvl_cb, 10)
+        self.create_subscription(String, '/auv/safety_status', self._safety_cb, 10)
+
         self.create_timer(1.0, self._draw)
         self.get_logger().info('Premium Mission Monitor active.')
 
@@ -101,7 +126,15 @@ class MissionMonitorNode(Node):
         self._odom_y = msg.pose.pose.position.y
         self._odom_z = msg.pose.pose.position.z
         q = msg.pose.pose.orientation
-        self._odom_yaw = math.degrees(math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z)))
+        sinr_cosp = 2.0 * (q.w * q.x + q.y * q.z)
+        cosr_cosp = 1.0 - 2.0 * (q.x * q.x + q.y * q.y)
+        roll = math.atan2(sinr_cosp, cosr_cosp)
+        sinp = 2.0 * (q.w * q.y - q.z * q.x)
+        pitch = math.copysign(math.pi / 2.0, sinp) if abs(sinp) >= 1.0 else math.asin(sinp)
+        yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+        self._odom_roll = math.degrees(roll)
+        self._odom_pitch = math.degrees(pitch)
+        self._odom_yaw = math.degrees(yaw)
         self._ready_odom = True
 
     def _cmd_cb(self, msg):
@@ -116,6 +149,15 @@ class MissionMonitorNode(Node):
     def _green_state_cb(self, msg): self._green_state = msg.data
     def _green_pos_cb(self, msg): self._green_pos = msg.data
     def _blue_bin_pos_cb(self, msg): self._blue_bin_pos = msg.data
+
+    def _depth_cb(self, msg): self._depth = msg.data
+    def _press_cb(self, msg): self._pressure_kpa = msg.fluid_pressure / 1000.0
+    def _leak_cb(self, msg): self._leak = msg.data
+    def _dvl_cb(self, msg): self._dvl_alt = msg.data
+    def _safety_cb(self, msg): self._safety_status = msg.data.split('|')[0].strip()
+    def _batt_cb(self, msg):
+        self._battery_pct = msg.percentage * 100.0
+        self._battery_v = msg.voltage
 
     # ── Drawing helpers ────────────────────────────────────────────────────
     def _line(self, text='', color='', align='left'):
@@ -147,8 +189,10 @@ class MissionMonitorNode(Node):
         # ── TELEMETRY ──────────────────────────────────────────────────
         lines.append(self._line(f'{BOLD}📡 TELEMETRY{RESET}'))
         if self._ready_odom:
-            pos_str = f'X: {self._odom_x:+.2f}m   Y: {self._odom_y:+.2f}m   Z: {self._odom_z:+.2f}m   Yaw: {self._odom_yaw:+.1f}°'
+            pos_str = f'X: {self._odom_x:+.2f}m   Y: {self._odom_y:+.2f}m   Z: {self._odom_z:+.2f}m'
+            att_str = f'Roll: {self._odom_roll:+.1f}°   Pitch: {self._odom_pitch:+.1f}°   Yaw: {self._odom_yaw:+.1f}°'
             lines.append(self._line(f'  {DIM}Pos:{RESET} {CYAN}{pos_str}{RESET}'))
+            lines.append(self._line(f'  {DIM}Att:{RESET} {CYAN}{att_str}{RESET}'))
         else:
             lines.append(self._line(f'  {DIM}Pos: waiting for /auv/odom...{RESET}'))
 
@@ -157,6 +201,18 @@ class MissionMonitorNode(Node):
             lines.append(self._line(f'  {DIM}Cmd:{RESET} {YELLOW}{cmd_str}{RESET}'))
         else:
             lines.append(self._line(f'  {DIM}Cmd: waiting for commands...{RESET}'))
+
+        # Sensors telemetry
+        leak_str = f"{RED}{BOLD}LEAK DETECTED{RESET}" if self._leak else f"{GREEN}DRY{RESET}"
+        depth_str = f"{self._depth:.2f}m" if self._depth is not None else "waiting..."
+        press_str = f"{self._pressure_kpa:.1f} kPa" if self._pressure_kpa is not None else "waiting..."
+        batt_str = f"{self._battery_pct:.0f}% ({self._battery_v:.1f}V)" if self._battery_pct is not None else "waiting..."
+        dvl_str = f"{self._dvl_alt:.2f}m" if self._dvl_alt is not None else "waiting..."
+        safety_color = GREEN if "NOMINAL" in self._safety_status else RED
+        safety_str = f"{safety_color}{BOLD}{self._safety_status}{RESET}"
+
+        lines.append(self._line(f'  {DIM}Sensors:{RESET} Depth: {CYAN}{depth_str}{RESET} | DVL Alt: {CYAN}{dvl_str}{RESET} | Batt: {YELLOW}{batt_str}{RESET} | Hull: {leak_str}'))
+        lines.append(self._line(f'  {DIM}Health Watchdog:{RESET} Status: {safety_str} | Press: {CYAN}{press_str}{RESET}'))
         lines.append(self._sep())
 
         # ── GATE PHASE ─────────────────────────────────────────────────

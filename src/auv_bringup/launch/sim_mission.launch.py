@@ -54,6 +54,7 @@ from launch.actions import (
     LogInfo,
     RegisterEventHandler,
 )
+from launch.conditions import IfCondition, UnlessCondition
 from launch.event_handlers import OnProcessExit, OnShutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, FindExecutable
@@ -90,13 +91,16 @@ def generate_launch_description():
     spawn_yaw = LaunchConfiguration('spawn_yaw')
 
     # Visual tools — disabled by default to reduce GPU/CPU load during development.
-    # Enable with: ros2 launch auv_bringup sim_mission.launch.py rviz:=true
-    rviz_arg      = DeclareLaunchArgument('rviz',       default_value='false',
-                                          description='Launch RViz2 visualiser')
+    # Enable with: ros2 launch auv_bringup sim_mission.launch.py rviz:=true image_view:=true
+    rviz_arg       = DeclareLaunchArgument('rviz',       default_value='false',
+                                           description='Launch RViz2 visualiser')
     image_view_arg = DeclareLaunchArgument('image_view', default_value='false',
                                            description='Launch live camera image_view')
-    rviz_on      = LaunchConfiguration('rviz')
+    headless_arg   = DeclareLaunchArgument('headless',   default_value='false',
+                                           description='Run Gazebo in headless mode (server only, no GUI)')
+    rviz_on       = LaunchConfiguration('rviz')
     image_view_on = LaunchConfiguration('image_view')
+    headless      = LaunchConfiguration('headless')
 
     # ── Package share paths ───────────────────────────────────────────────
     auv_desc_share  = get_package_share_directory('auv_description')
@@ -124,11 +128,19 @@ def generate_launch_description():
         'GDK_BACKEND': 'x11',                  # force X11 for reliable xinput
         'GZ_SIM_RESOURCE_PATH': workspace_share_dir,
     }
-    gazebo = ExecuteProcess(
+    gazebo_gui = ExecuteProcess(
         cmd=['gz', 'sim', '-r', world],
         output='log',
         name='gazebo',
         additional_env=gazebo_env,
+        condition=UnlessCondition(headless),
+    )
+    gazebo_headless = ExecuteProcess(
+        cmd=['gz', 'sim', '-r', '-s', world],
+        output='log',
+        name='gazebo',
+        additional_env=gazebo_env,
+        condition=IfCondition(headless),
     )
 
     # ── Cleanup hook: re-enable mouse after Gazebo exits ─────────────────
@@ -136,7 +148,7 @@ def generate_launch_description():
     # this runs `xinput --enable` on every pointer device to recover input.
     mouse_cleanup = RegisterEventHandler(
         OnProcessExit(
-            target_action=gazebo,
+            target_action=gazebo_gui,
             on_exit=[
                 ExecuteProcess(
                     cmd=[
@@ -326,6 +338,50 @@ def generate_launch_description():
                 parameters=[sim_params_yaml],
             ),
 
+            # ── Sensors Layer ────────────────────────────────────────────
+            Node(
+                package='auv_sensors',
+                executable='depth_sensor',
+                name='depth_sensor',
+                output='log',
+                parameters=[sim_params_yaml],
+            ),
+            Node(
+                package='auv_sensors',
+                executable='dvl_sensor',
+                name='dvl_sensor',
+                output='log',
+                parameters=[sim_params_yaml],
+            ),
+            Node(
+                package='auv_sensors',
+                executable='sensor_fusion_node',
+                name='sensor_fusion_node',
+                output='log',
+                parameters=[sim_params_yaml],
+            ),
+            Node(
+                package='auv_sensors',
+                executable='safety_supervisor_node',
+                name='safety_supervisor_node',
+                output='log',
+                parameters=[sim_params_yaml],
+            ),
+            Node(
+                package='auv_sensors',
+                executable='leak_mock',
+                name='leak_mock',
+                output='log',
+                parameters=[sim_params_yaml],
+            ),
+            Node(
+                package='auv_sensors',
+                executable='battery_mock',
+                name='battery_mock',
+                output='log',
+                parameters=[sim_params_yaml],
+            ),
+
             # ── Planners ─────────────────────────────────────────────────
 
             # 11. Gate navigator v2 — forward 8 m, strafe search, track, align, cross
@@ -409,7 +465,6 @@ def generate_launch_description():
         ]
     )
 
-    from launch.conditions import IfCondition
 
     # 13. RViz2 — opt-in (disabled by default to free up GPU during development)
     #     Enable: ros2 launch auv_bringup sim_mission.launch.py rviz:=true
@@ -440,10 +495,12 @@ def generate_launch_description():
         spawn_yaw_arg,
         rviz_arg,
         image_view_arg,
+        headless_arg,
 
         # Sequence
         LogInfo(msg='[sim_mission] Launching AUV gate mission (simulation)...'),
-        gazebo,
+        gazebo_gui,
+        gazebo_headless,
         mouse_cleanup,   # re-enables mouse if Gazebo exits without releasing grab
         shutdown_notice, # warns not to double-Ctrl+C while things shut down
         spawn_auv,

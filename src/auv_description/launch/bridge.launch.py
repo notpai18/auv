@@ -25,6 +25,9 @@ def generate_launch_description():
             '/model/auv_box/stereo_front/left/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
             '/model/auv_box/stereo_front/right/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
             '/model/auv_box/bottom/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+            # IMU & Magnetometer bridges
+            '/auv/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
+            '/auv/magnetometer@sensor_msgs/msg/MagneticField[gz.msgs.Magnetometer',
             # 8 Physical Thruster command bridges (ROS Float64 -> Gazebo Double)
             '/model/auv_box/joint/T_1/cmd_thrust@std_msgs/msg/Float64]gz.msgs.Double',
             '/model/auv_box/joint/T_2/cmd_thrust@std_msgs/msg/Float64]gz.msgs.Double',

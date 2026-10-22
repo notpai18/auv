@@ -42,9 +42,11 @@ class DepthHoldNode(Node):
         self.declare_parameter('kd',               0.8)
         self.declare_parameter('max_vertical_vel', 0.30)   # m/s hard cap
         self.declare_parameter('deadband_m',       0.02)   # m  stop chatter near target
-        self.declare_parameter('odom_topic',       '/auv/odom')
-        self.declare_parameter('output_topic',     '/auv/depth_cmd_vel')
-        self.declare_parameter('setpoint_topic',   '/auv/set_target_depth')
+        self.declare_parameter('odom_topic',          '/auv/odom')
+        self.declare_parameter('output_topic',        '/auv/depth_cmd_vel')
+        self.declare_parameter('setpoint_topic',      '/auv/set_target_depth')
+        self.declare_parameter('use_depth_sensor',    False) # If true, reads hydrostatic depth from /auv/depth
+        self.declare_parameter('depth_sensor_topic',  '/auv/depth')
         # ────────────────────────────────────────────────────────────────
 
         p = self.get_parameter
@@ -54,6 +56,7 @@ class DepthHoldNode(Node):
         self._kd         = p('kd').value
         self._max_vel    = p('max_vertical_vel').value
         self._deadband   = p('deadband_m').value
+        self._use_depth_sensor = bool(p('use_depth_sensor').value)
 
         # Anti-windup: integral term can contribute at most max_vel
         self._int_limit  = self._max_vel / max(self._ki, 1e-9)
@@ -62,8 +65,15 @@ class DepthHoldNode(Node):
         self._last_time  = None
 
         # ── ROS interfaces ───────────────────────────────────────────────
-        self._odom_sub = self.create_subscription(
-            Odometry, p('odom_topic').value, self._odom_cb, 10)
+        if self._use_depth_sensor:
+            self._depth_sensor_sub = self.create_subscription(
+                Float32, p('depth_sensor_topic').value, self._depth_sensor_cb, 10)
+            self._odom_sub = None
+        else:
+            self._odom_sub = self.create_subscription(
+                Odometry, p('odom_topic').value, self._odom_cb, 10)
+            self._depth_sensor_sub = None
+
         self._setpoint_sub = self.create_subscription(
             Float32, p('setpoint_topic').value, self._setpoint_cb, 10)
         self._cmd_pub = self.create_publisher(
@@ -94,17 +104,25 @@ class DepthHoldNode(Node):
             f'[DepthHold] Target changed: {old:.3f} → {self._target_z:.3f} m'
         )
 
-    # ── PID callback (runs at odom rate, ~50 Hz) ─────────────────────────
+    # ── PID callbacks (runs at sensor/odom rate) ─────────────────────────
+
+    def _depth_sensor_cb(self, msg: Float32):
+        # /auv/depth is depth in metres (positive downwards).
+        # In ROS world frame, submerged z is negative: current_z = -depth
+        current_z = -float(msg.data)
+        self._process_depth_reading(current_z)
 
     def _odom_cb(self, msg: Odometry):
         current_z = msg.pose.pose.position.z
+        self._process_depth_reading(current_z)
 
+    def _process_depth_reading(self, current_z: float):
         # Publish depth for telemetry
         dm = Float32()
         dm.data = float(current_z)
         self._depth_pub.publish(dm)
 
-        # Latch target on first valid odom message
+        # Latch target on first valid reading
         if math.isnan(self._target_z):
             self._target_z = current_z
             self.get_logger().info(

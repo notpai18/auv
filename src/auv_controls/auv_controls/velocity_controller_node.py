@@ -23,8 +23,10 @@ import time
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from geometry_msgs.msg import Twist, Wrench
 from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Imu
 from std_msgs.msg import Float32
 
 
@@ -82,11 +84,16 @@ class VelocityControllerNode(Node):
         self.declare_parameter('ki_yaw',   0.5)
         self.declare_parameter('kd_yaw',   0.8)
 
-        # Posture stabilization (roll & pitch damping)
-        self.declare_parameter('kp_roll',  15.0)
-        self.declare_parameter('kd_roll',  3.0)
-        self.declare_parameter('kp_pitch', 15.0)
-        self.declare_parameter('kd_pitch', 3.0)
+        # Posture stabilization (active roll & pitch horizontal leveling via Gyroscope)
+        self.declare_parameter('imu_topic',    '/auv/imu')
+        self.declare_parameter('target_roll',  0.0)   # target roll (rad) — level
+        self.declare_parameter('target_pitch', 0.0)   # target pitch (rad) — level
+        self.declare_parameter('kp_roll',      25.0)  # active horizontal restoring gain
+        self.declare_parameter('ki_roll',      1.5)   # steady-state tilt trim eliminator
+        self.declare_parameter('kd_roll',      5.0)   # Gyroscope roll rate damping
+        self.declare_parameter('kp_pitch',     25.0)  # active horizontal restoring gain
+        self.declare_parameter('ki_pitch',     1.5)   # steady-state tilt trim eliminator
+        self.declare_parameter('kd_pitch',     5.0)   # Gyroscope pitch rate damping
 
         # Maximum forces & moments
         self.declare_parameter('max_force_x',  80.0)  # N
@@ -116,8 +123,10 @@ class VelocityControllerNode(Node):
         self._kd_yaw = float(p('kd_yaw').value)
 
         self._kp_roll = float(p('kp_roll').value)
+        self._ki_roll = float(p('ki_roll').value)
         self._kd_roll = float(p('kd_roll').value)
         self._kp_pitch = float(p('kp_pitch').value)
+        self._ki_pitch = float(p('ki_pitch').value)
         self._kd_pitch = float(p('kd_pitch').value)
 
         self._max_fx = float(p('max_force_x').value)
@@ -136,11 +145,18 @@ class VelocityControllerNode(Node):
         self._body_ang_vel = [0.0, 0.0, 0.0]
         self._has_odom = False
 
+        # Gyroscope & IMU state (from /auv/imu)
+        self._gyro_ang_vel = [0.0, 0.0, 0.0]
+        self._imu_rpy = None
+        self._has_imu = False
+
         # Integrators
         self._int_surge = 0.0
         self._int_sway = 0.0
         self._int_depth = 0.0
         self._int_yaw = 0.0
+        self._int_roll = 0.0
+        self._int_pitch = 0.0
 
         # Previous errors for derivative
         self._prev_err_surge = 0.0
@@ -154,6 +170,8 @@ class VelocityControllerNode(Node):
             Twist, p('cmd_vel_topic').value, self._cmd_cb, 10)
         self._odom_sub = self.create_subscription(
             Odometry, p('odom_topic').value, self._odom_cb, 10)
+        self._imu_sub = self.create_subscription(
+            Imu, p('imu_topic').value, self._imu_cb, qos_profile_sensor_data)
         self._depth_set_sub = self.create_subscription(
             Float32, '/auv/set_target_depth', self._set_depth_cb, 10)
 
@@ -164,7 +182,8 @@ class VelocityControllerNode(Node):
         self._timer = self.create_timer(period, self._control_loop)
 
         self.get_logger().info(
-            f'Velocity Controller Node running @ {p("control_rate_hz").value:.0f} Hz -> {p("wrench_topic").value}'
+            f'Velocity Controller Node running @ {p("control_rate_hz").value:.0f} Hz -> {p("wrench_topic").value} '
+            f'(Gyroscope leveling active: roll/pitch target=0.0 rad)'
         )
 
     def _cmd_cb(self, msg: Twist):
@@ -175,6 +194,19 @@ class VelocityControllerNode(Node):
         self._target_depth = float(msg.data)
         self._int_depth = 0.0
         self.get_logger().info(f'[VelocityController] Target depth updated: {self._target_depth:.3f} m')
+
+    def _imu_cb(self, msg: Imu):
+        # 3-axis Gyroscope angular velocity (rad/s)
+        self._gyro_ang_vel = [
+            msg.angular_velocity.x,
+            msg.angular_velocity.y,
+            msg.angular_velocity.z
+        ]
+        self._has_imu = True
+        q = msg.orientation
+        if abs(q.w) > 1e-4 or abs(q.x) > 1e-4 or abs(q.y) > 1e-4 or abs(q.z) > 1e-4:
+            r, pt, y = quat_to_euler(q.x, q.y, q.z, q.w)
+            self._imu_rpy = [r, pt, y]
 
     def _odom_cb(self, msg: Odometry):
         p = msg.pose.pose.position
@@ -235,9 +267,18 @@ class VelocityControllerNode(Node):
 
         # Current body states
         vx, vy, vz = self._body_lin_vel
-        roll, pitch, yaw = self._current_rpy
-        wx, wy, wz = self._body_ang_vel
         cz = self._current_pos[2]
+
+        # Use IMU for attitude and rate gyroscope angular velocity when available
+        if self._has_imu and self._imu_rpy is not None:
+            roll, pitch, _ = self._imu_rpy
+        else:
+            roll, pitch, _ = self._current_rpy
+
+        if self._has_imu:
+            gyro_wx, gyro_wy, gyro_wz = self._gyro_ang_vel
+        else:
+            gyro_wx, gyro_wy, gyro_wz = self._body_ang_vel
 
         # ── 1. Surge Control (Fx) ───────────────────────────────────────
         err_surge = cmd_vx - vx
@@ -276,10 +317,24 @@ class VelocityControllerNode(Node):
 
         fz = max(-self._max_fz, min(self._max_fz, fz))
 
-        # ── 4. Roll & Pitch Attitude Stabilization (Mx, My) ─────────────
-        # Active restoration torque to maintain zero roll and pitch
-        mx = -self._kp_roll * roll - self._kd_roll * wx
-        my = -self._kp_pitch * pitch - self._kd_pitch * wy
+        # ── 4. Roll & Pitch Attitude Stabilization (Mx, My) via Gyroscope ─────────────
+        # Active horizontal leveling without tilt: target_roll = 0.0, target_pitch = 0.0
+        target_roll = float(self.get_parameter('target_roll').value)
+        target_pitch = float(self.get_parameter('target_pitch').value)
+
+        err_roll = target_roll - roll
+        err_pitch = target_pitch - pitch
+
+        # Anti-windup integral terms cancel steady-state buoyancy / drag trim offsets
+        self._int_roll = max(-10.0, min(10.0, self._int_roll + err_roll * dt))
+        self._int_pitch = max(-10.0, min(10.0, self._int_pitch + err_pitch * dt))
+
+        # Full PID with active Gyroscope rate damping:
+        # P: drives tilt angle to 0.0
+        # I: actively eliminates steady-state tilt from asymmetric buoyancy/drag
+        # D: direct Gyroscope angular velocity feedback (-kd * gyro_w) counteracts dynamic tilting
+        mx = self._kp_roll * err_roll + self._ki_roll * self._int_roll - self._kd_roll * gyro_wx
+        my = self._kp_pitch * err_pitch + self._ki_pitch * self._int_pitch - self._kd_pitch * gyro_wy
 
         # Safety tipping prevention: if tilt > 35 deg, damp horizontal thrust
         tilt = math.sqrt(roll * roll + pitch * pitch)
@@ -293,7 +348,8 @@ class VelocityControllerNode(Node):
         my = max(-self._max_txy, min(self._max_txy, my))
 
         # ── 5. Yaw Control (Mz) ─────────────────────────────────────────
-        err_yaw = cmd_wz - wz
+        # Use direct Gyroscope yaw rate for feedback
+        err_yaw = cmd_wz - gyro_wz
         self._int_yaw = max(-10.0, min(10.0, self._int_yaw + err_yaw * dt))
         der_yaw = (err_yaw - self._prev_err_yaw) / dt
         self._prev_err_yaw = err_yaw
